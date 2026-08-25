@@ -63,7 +63,6 @@ public class FavoriteService {
             m.put("messageId", f.getMessageId());
             m.put("createdAt", f.getCreatedAt());
             m.put("content", msg == null ? "" : msg.getContent());
-            m.put("citationsJson", msg == null ? null : msg.getCitationsJson());
             m.put("sessionId", msg == null ? null : msg.getSessionId());
             return m;
         }).toList();

@@ -1,11 +1,14 @@
 package com.healthkb.controller;
 
 import com.healthkb.common.ApiResponse;
+import com.healthkb.common.RateLimiter;
+import com.healthkb.security.SecurityUtils;
 import com.healthkb.dto.ChatDtos;
 import com.healthkb.entity.ChatMessage;
 import com.healthkb.entity.ChatSession;
 import com.healthkb.service.ChatService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +30,7 @@ import com.healthkb.entity.ChatImage;
 import com.healthkb.service.ChatImageService;
 
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +41,13 @@ public class ChatController {
 
     private final ChatService chatService;
     private final ChatImageService chatImageService;
+    private final RateLimiter rateLimiter;
+
+    @Value("${app.rate-limit.chat.limit:20}")
+    private int chatLimit;
+
+    @Value("${app.rate-limit.chat.window-seconds:60}")
+    private int chatWindowSeconds;
 
     @PostMapping("/chat/sessions")
     public ApiResponse<ChatSession> create(@RequestBody(required = false) ChatDtos.CreateSessionRequest req) {
@@ -88,6 +99,9 @@ public class ChatController {
 
     @PostMapping(value = "/chat/ask", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter ask(@RequestBody ChatDtos.AskRequest req, HttpServletResponse response) {
+        // 问答直连大模型，是最主要的花钱口子，先扣配额再进业务
+        rateLimiter.require("chat", SecurityUtils.currentUserId(), chatLimit,
+                Duration.ofSeconds(chatWindowSeconds), "提问太频繁了，请稍后再试");
         response.setHeader("Cache-Control", "no-cache");
         response.setHeader("X-Accel-Buffering", "no");
         return chatService.ask(req.getSessionId(), req.getQuestion(), req.getImageIds(), req.getProfileId());

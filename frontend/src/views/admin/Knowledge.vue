@@ -162,4 +162,11 @@ async function remove(id: number) {
 .block {
   margin-top: 14px;
 }
+
+@media (max-width: 720px) {
+  /* 列宽之和约 980px，窄屏必然横向滚动，这里只把字号压下来减少滚动距离 */
+  .el-table {
+    font-size: 12px;
+  }
+}
 </style>

@@ -6,7 +6,6 @@ export interface FavoriteItem {
   messageId: number
   createdAt: string
   content: string
-  citationsJson?: string
   sessionId?: number
 }
 

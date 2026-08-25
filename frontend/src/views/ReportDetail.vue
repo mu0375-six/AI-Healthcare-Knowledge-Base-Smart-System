@@ -123,4 +123,11 @@ h3 {
   color: var(--ink-2);
   margin: 0;
 }
+
+@media (max-width: 720px) {
+  /* 指标表有 5 列，窄屏放不下，交给表格自身横向滚动 */
+  .el-table {
+    font-size: 12px;
+  }
+}
 </style>

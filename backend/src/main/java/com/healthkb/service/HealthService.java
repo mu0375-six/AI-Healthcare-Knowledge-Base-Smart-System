@@ -439,32 +439,36 @@ public class HealthService {
         return sb.toString();
     }
 
+    /**
+     * 给大模型看的趋势摘要。分析逻辑在 {@link MetricTrendAnalyzer}，
+     * 与 /api/health/trends 返回给前端的是同一份判断，避免两处口径不一致。
+     */
     private String trendComments(List<HealthMetric> metrics) {
-        Map<String, List<HealthMetric>> byType = metrics.stream()
-                .collect(Collectors.groupingBy(HealthMetric::getMetricType));
+        List<MetricTrendAnalyzer.Trend> trends = MetricTrendAnalyzer.analyze(metrics);
         StringBuilder sb = new StringBuilder("趋势分析：\n");
-        boolean any = false;
-        for (Map.Entry<String, List<HealthMetric>> e : byType.entrySet()) {
-            List<HealthMetric> list = e.getValue().stream()
-                    .sorted(Comparator.comparing(HealthMetric::getRecordedAt))
-                    .toList();
-            if (list.size() < 2) {
-                continue;
-            }
-            any = true;
-            double first = list.get(0).getMetricValue();
-            double last = list.get(list.size() - 1).getMetricValue();
-            double delta = last - first;
-            String dir = delta > 0.05 ? "上升" : (delta < -0.05 ? "下降" : "基本持平");
-            sb.append("- ").append(e.getKey()).append(" 近 ").append(list.size())
-                    .append(" 次由 ").append(first).append(" 至 ").append(last)
-                    .append("，总体").append(dir).append("。\n");
+        if (trends.isEmpty()) {
+            sb.append("暂无指标记录。\n");
         }
-        if (!any) {
-            sb.append("同类指标记录不足 2 次，暂不能判断趋势。建议定期复查血压、血糖和体重。\n");
+        for (MetricTrendAnalyzer.Trend t : trends) {
+            sb.append("- ").append(t.note()).append("\n");
+        }
+        boolean anyAlert = trends.stream().anyMatch(MetricTrendAnalyzer.Trend::alert);
+        if (anyAlert) {
+            sb.append("注意：上述带「连续超出参考范围」的指标请在建议里重点说明复查安排。\n");
         }
         sb.append(MedicalConstants.DISCLAIMER);
         return sb.toString();
+    }
+
+    /** 供 /api/health/trends 直接返回。 */
+    public List<MetricTrendAnalyzer.Trend> trends(Long profileId) {
+        Long userId = SecurityUtils.currentUserId();
+        HealthProfile profile = resolveProfile(profileId);
+        List<HealthMetric> metrics = metricMapper.selectList(new LambdaQueryWrapper<HealthMetric>()
+                .eq(HealthMetric::getUserId, userId)
+                .eq(HealthMetric::getProfileId, profile.getId())
+                .orderByAsc(HealthMetric::getRecordedAt));
+        return MetricTrendAnalyzer.analyze(metrics);
     }
 
     private static String joinDiseases(List<HealthHistory> list) {

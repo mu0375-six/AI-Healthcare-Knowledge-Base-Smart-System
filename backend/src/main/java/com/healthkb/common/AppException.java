@@ -33,4 +33,8 @@ public class AppException extends RuntimeException {
     public static AppException conflict(String message) {
         return new AppException(409, message, HttpStatus.CONFLICT);
     }
+
+    public static AppException tooManyRequests(String message) {
+        return new AppException(429, message, HttpStatus.TOO_MANY_REQUESTS);
+    }
 }

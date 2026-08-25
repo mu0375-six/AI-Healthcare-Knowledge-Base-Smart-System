@@ -16,7 +16,6 @@ public class ChatMessage {
     private Long userId;
     private String role;
     private String content;
-    private String citationsJson;
     private String attachmentsJson;
     private LocalDateTime createdAt;
 }

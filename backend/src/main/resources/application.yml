@@ -78,6 +78,18 @@ app:
     timeout-seconds: 90
   chat:
     image-dir: ${APP_CHAT_IMAGE_DIR:./data/chat-images}
+  # 按用户维度的固定窗口限流。三个接口都会直连大模型，是唯一直接产生费用的地方。
+  # limit 设为 0 或负数表示该项不限流。
+  rate-limit:
+    chat:
+      limit: ${APP_RATE_LIMIT_CHAT:20}
+      window-seconds: 60
+    upload:
+      limit: ${APP_RATE_LIMIT_UPLOAD:5}
+      window-seconds: 60
+    advice:
+      limit: ${APP_RATE_LIMIT_ADVICE:10}
+      window-seconds: 60
   kb:
     allow-network: ${APP_KB_ALLOW_NETWORK:true}
     timeout-seconds: 18

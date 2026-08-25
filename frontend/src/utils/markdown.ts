@@ -87,15 +87,4 @@ export function parseAttachments(raw?: string | null): { id: number; filename: s
   }
 }
 
-export function parseCitations(raw?: string | CitationLike[] | null) {
-  if (!raw) return []
-  if (Array.isArray(raw)) return raw
-  try {
-    const v = JSON.parse(raw)
-    return Array.isArray(v) ? v : []
-  } catch {
-    return []
-  }
-}
 
-type CitationLike = { title?: string; snippet?: string }

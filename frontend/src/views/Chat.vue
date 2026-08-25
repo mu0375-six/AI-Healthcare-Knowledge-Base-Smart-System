@@ -250,7 +250,6 @@ async function send() {
     userId: 0,
     role: 'assistant',
     content: '',
-    citationsJson: '[]',
     createdAt: '',
   }
   messages.value.push(bot)
@@ -277,7 +276,6 @@ async function send() {
         onDone: (done) => {
           botMsg.id = done.messageId
           botMsg.content = done.fullContent
-          botMsg.citationsJson = '[]'
         },
         onError: (msg) => ElMessage.error(msg),
       },

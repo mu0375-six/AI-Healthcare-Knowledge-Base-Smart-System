@@ -18,7 +18,6 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -29,7 +28,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -120,20 +118,11 @@ public class ChatImageService {
         sb.append("请结合可见/识别内容回答：检查单逐项说明，药品包装讲注意事项，皮肤或伤口只描述可见情况并提示就医，看不清要明说。\n");
         int i = 1;
         for (ChatImage img : images) {
-            Path path = pathOf(img);
-            String meta = metaLine(path, img);
-            String ocr = ocr(path);
-            if (ocr != null && !ocr.isBlank()) {
-                img.setOcrText(ocr);
-                imageMapper.updateById(img);
-            }
-            sb.append("\n图").append(i++).append("：").append(img.getFilename()).append(" ").append(meta).append("\n");
-            if (ocr == null || ocr.isBlank()) {
-                sb.append("未能从该图识别出文字。图片已随请求发送给多模态视觉模型，请直接观察图片内容作答；确实看不清时说明看不清。\n");
-            } else {
-                sb.append("从图中识别出的文字：\n").append(ocr.trim()).append("\n");
-            }
+            sb.append("\n图").append(i++).append("：").append(img.getFilename())
+                    .append(" ").append(metaLine(pathOf(img), img)).append("\n");
         }
+        sb.append("\n图片已随请求以 base64 发送给多模态视觉模型，请直接观察图片内容作答；"
+                + "图中若有文字（检查单、药品说明）请逐项读出；确实看不清时明说看不清。\n");
         return sb.toString();
     }
 
@@ -168,43 +157,6 @@ public class ChatImageService {
             ));
         }
         return list;
-    }
-
-    private String ocr(Path path) {
-        if (path == null || !Files.isRegularFile(path)) {
-            return "";
-        }
-        String text = runTesseract(path, "chi_sim+eng");
-        if (text.isBlank()) {
-            text = runTesseract(path, "eng");
-        }
-        return text.length() > 4000 ? text.substring(0, 4000) + "…" : text;
-    }
-
-    private String runTesseract(Path path, String lang) {
-        try {
-            ProcessBuilder pb = new ProcessBuilder(
-                    tesseractCmd(), path.toAbsolutePath().toString(), "stdout", "-l", lang, "--psm", "6");
-            Path localTess = Path.of(System.getProperty("user.dir"), "data", "tessdata");
-            if (Files.isDirectory(localTess) && Files.isRegularFile(localTess.resolve("chi_sim.traineddata"))) {
-                pb.environment().put("TESSDATA_PREFIX", localTess.toAbsolutePath().toString());
-            }
-            pb.redirectErrorStream(true);
-            Process p = pb.start();
-            boolean done = p.waitFor(20, TimeUnit.SECONDS);
-            if (!done) {
-                p.destroyForcibly();
-                return "";
-            }
-            String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-            if (p.exitValue() != 0 && out.toLowerCase(Locale.ROOT).contains("error")) {
-                return "";
-            }
-            return out.replaceAll("(?i)tesseract.*\\n", "").trim();
-        } catch (Exception e) {
-            log.debug("tesseract 不可用: {}", e.toString());
-            return "";
-        }
     }
 
     private String metaLine(Path path, ChatImage img) {
@@ -247,20 +199,6 @@ public class ChatImageService {
         } catch (Exception e) {
             return raw;
         }
-    }
-
-    private static String tesseractCmd() {
-        String[] candidates = {
-                "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
-                "C:\\Program Files (x86)\\Tesseract-OCR\\tesseract.exe",
-                "tesseract"
-        };
-        for (String c : candidates) {
-            if (!"tesseract".equals(c) && Files.isRegularFile(Path.of(c))) {
-                return c;
-            }
-        }
-        return "tesseract";
     }
 
     private static String extOf(String filename) {

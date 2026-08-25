@@ -109,8 +109,8 @@ npm run dev
 
 | 模块 | 说明 |
 | --- | --- |
-| 智能健康问答 | RAG 检索知识库，SSE 流式回答，引用卡片，医学名词高亮；命中急症关键词时先于模型输出弹出急诊提示 |
-| 健康档案 | 档案/指标/病史，ECharts 趋势，AI 建议；默认仅本人可见 |
+| 智能健康问答 | RAG 检索知识库，SSE 流式回答，正文末尾标注出处，医学名词高亮；命中急症关键词时先于模型输出弹出急诊提示 |
+| 健康档案 | 档案/指标/病史，ECharts 曲线 + 连续超标提醒，AI 建议；默认仅本人可见 |
 | 报告解读 | Tika 解析 PDF/Word/txt；解析空腹血糖、血压等指标并逐项解读 |
 | 知识库管理 | 启动时同步 WHO / 国家卫健委公开文本；管理员也可再同步或上传 |
 | 科室导诊 | 规则 + 向量检索，急诊关键词直达急诊科（规则与问答共用 `EmergencyRules`） |
@@ -195,6 +195,21 @@ mode = rerank   阈值 = 0.55
   高血压       vec=0.707  lex=0.00  combined=0.495   ← 挡掉
 ```
 
+### 接口限流
+
+问答、报告解读、健康建议三个接口都会直连大模型，是本项目唯一直接产生费用的地方，
+因此按用户维度做了固定窗口限流。默认值可用环境变量覆盖：
+
+| 动作 | 变量 | 默认 |
+| --- | --- | --- |
+| 问答 `/api/chat/ask` | `APP_RATE_LIMIT_CHAT` | 20 次 / 分钟 |
+| 报告上传 `/api/reports/upload` | `APP_RATE_LIMIT_UPLOAD` | 5 次 / 分钟 |
+| 健康建议 `/api/health/advice` | `APP_RATE_LIMIT_ADVICE` | 10 次 / 分钟 |
+
+超限返回 HTTP 429。计数优先走 Redis（多实例共享），Redis 不可用时退回进程内计数 ——
+此时各实例配额独立、总量会放大到实例数倍，但对「防脚本刷爆」仍然有效。
+设为 `0` 表示该项不限流。
+
 ### 权威知识库
 
 默认从下列公开权威源同步（启动时自动执行；后台「知识库」也可再点同步）：
@@ -206,7 +221,36 @@ mode = rerank   阈值 = 0.55
 
 ### 报告图片
 
-未安装 Tesseract 时图片无法 OCR。可同时提交 `extractedText`，或将文件名包含 `demo` 以使用内置示例解析。也可直接上传仓库中的 `samples/demo-report.txt`。
+报告解读走 Tika，只解析 PDF/Word/txt 的文本层，**不对图片做 OCR**。上传图片报告时可同时提交 `extractedText`，或将文件名包含 `demo` 以使用内置示例解析。也可直接上传仓库中的 `samples/demo-report.txt`。
+
+问答里的图片是另一条路：直接以 base64 送给多模态模型观察，不经过 OCR。
+
+## 容器化部署
+
+基础设施与应用都在 `docker-compose.yml` 里。应用侧放在 `app` profile 下，
+默认不随基础设施一起启动：
+
+```bash
+# 只起基础设施做本地开发（前后端仍在本机跑）
+docker compose up -d mysql redis milvus
+
+# 前后端也一起容器化跑起来
+docker compose --profile app up -d --build
+```
+
+起来后前端在 `http://localhost:8081`，nginx 把 `/api` 反代到 backend 容器。
+SSE 需要关闭代理缓冲，`frontend/nginx.conf` 里已经配好 `proxy_buffering off`，
+否则流式回答会被攒到最后一次性吐出。
+
+后端镜像用非 root 运行，且不含任何默认密钥 —— 全部由 compose 从 `.env` 注入。
+
+## 持续集成
+
+`.github/workflows/ci.yml` 在 push 与 PR 时跑三件事：
+
+- 后端 `mvn test`（用 `test/resources/application.yml`，不依赖 `.env` 与任何外部服务）
+- 前端 `npm run build`（其中已包含 `vue-tsc --noEmit` 类型检查）
+- 密钥自查：`.env` 是否误入库、跟踪文件里是否有形如 `sk-xxx` 的明文 Key
 
 ## 主要 API
 
@@ -214,7 +258,7 @@ mode = rerank   阈值 = 0.55
 
 - `POST /api/auth/register` `POST /api/auth/login` `GET /api/auth/me`
 - `POST /api/chat/ask`（`text/event-stream`：`meta` / `delta` / `citation` / `done` / `error`）
-- `GET/POST /api/health/profile|metrics|histories` `POST /api/health/advice`
+- `GET/POST /api/health/profile|metrics|histories` `GET /api/health/trends` `POST /api/health/advice`
 - `GET /api/admin/health/{userId}`（仅当该用户 `sharedToAdmin=true`）
 - `POST /api/reports/upload` `GET /api/reports` `GET /api/reports/{id}`
 - `GET/POST/DELETE /api/admin/knowledge*`
@@ -244,6 +288,6 @@ npx vue-tsc --noEmit
 - 未配置 LLM 时为模板化检索回答，不是真实大模型推理。
 - 未配置 `app.embedding.*` 时向量为哈希嵌入，适合演示语料召回，不适合大规模语义检索；此时检索走 `lexical-filter` 模式，同义表述的召回能力有限。
 - `app.rag.rerank.min-score` 的默认值 0.55 是按 cosine 相关度 0~1 给的起点，不是对某个具体模型标定过的最优值。
-- 问答支持图片视觉识别：默认 flash-vision 会直接观察上传图片；本机 Tesseract OCR 仅作为文字补充，缺失时仍可看图作答。
+- 问答的图片识别完全交给多模态模型（flash-vision 直接观察图片），已移除对本机 Tesseract 的依赖；未配置多模态模型时图片问诊不可用。
 - 未启动 Milvus 时退化为内存向量库；接口抽象保证开箱可用。
 - 知识库使用 WHO / 国家卫健委等公开网页或官方快照，不是医院电子病历或付费指南全文库。

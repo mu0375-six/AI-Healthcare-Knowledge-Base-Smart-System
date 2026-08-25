@@ -49,6 +49,23 @@ export function deleteHistory(id: number) {
   return http.delete<unknown, ApiEnvelope<void>>(`/api/health/histories/${id}`)
 }
 
+export interface MetricTrend {
+  metricType: string
+  unit: string
+  samples: number
+  latest: number
+  latestFlag: 'low' | 'normal' | 'high' | 'unknown'
+  latestFlagText: string
+  consecutiveAbnormal: number
+  alert: boolean
+  direction: 'rising' | 'falling' | 'flat' | 'unknown'
+  note: string
+}
+
+export function listTrends(profileId?: number) {
+  return http.get<unknown, ApiEnvelope<MetricTrend[]>>('/api/health/trends', { params: { profileId } })
+}
+
 export function generateAdvice(profileId?: number) {
   return http.post<unknown, ApiEnvelope<{ advice: string; basis?: string; generatedAt?: string }>>(
     '/api/health/advice',

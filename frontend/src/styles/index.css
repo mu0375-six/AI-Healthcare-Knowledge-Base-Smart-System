@@ -326,3 +326,48 @@ a.copper-btn {
     font-size: 26px;
   }
 }
+
+/* ---- 窄屏（手机）----
+   健康类应用的主场景就是手机，这里统一收口三类最常见的溢出，
+   避免每个页面各写一遍：
+   1. 表单控件里写死的内联宽度（style="width: 240px"）在 375px 屏上放不下
+   2. 页面与面板的内边距按桌面尺寸给的，窄屏下挤掉了正文宽度
+   3. 表格列宽之和超过屏宽时，要让表格自己横向滚动，而不是把整页撑宽 */
+@media (max-width: 720px) {
+  /* 覆盖内联 style 只能用 !important，这是本文件里唯一一处 */
+  .el-select,
+  .el-input,
+  .el-date-editor,
+  .el-input-number {
+    width: 100% !important;
+  }
+
+  .el-table {
+    font-size: 13px;
+  }
+  /* 表格横向滚动限制在自身容器内，页面 body 不出现横向滚动条 */
+  .el-table__body-wrapper,
+  .el-table__header-wrapper {
+    overflow-x: auto;
+  }
+
+  .sheet-pad {
+    padding: 16px 14px;
+  }
+  .page {
+    padding-bottom: 24px;
+  }
+  .page-head {
+    margin-bottom: 16px;
+  }
+  .page-head h2 {
+    font-size: 22px;
+  }
+  .page-head p {
+    font-size: 13px;
+  }
+  .disclaimer {
+    margin-top: 16px;
+    font-size: 11px;
+  }
+}

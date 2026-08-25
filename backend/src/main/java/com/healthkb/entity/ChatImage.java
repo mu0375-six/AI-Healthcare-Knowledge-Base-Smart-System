@@ -19,6 +19,5 @@ public class ChatImage {
     private String mimeType;
     private String storedName;
     private Long byteSize;
-    private String ocrText;
     private LocalDateTime createdAt;
 }

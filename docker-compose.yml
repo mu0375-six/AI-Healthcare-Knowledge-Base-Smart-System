@@ -61,6 +61,50 @@ services:
       retries: 3
       start_period: 90s
 
+  # 应用本身。默认不随 `up -d mysql redis` 启动，需要显式指定或用 --profile app：
+  #   docker compose --profile app up -d --build
+  # 只想起基础设施做本地开发时，照旧 `docker compose up -d mysql redis milvus`。
+  backend:
+    profiles: ["app"]
+    build:
+      context: ./backend
+    container_name: healthkb-backend
+    restart: unless-stopped
+    depends_on:
+      - mysql
+      - redis
+    environment:
+      # 容器之间用服务名互访，覆盖掉面向本机开发的默认值
+      MYSQL_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-healthkb}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      MYSQL_USER: ${MYSQL_USER:-healthkb}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请先 copy .env.example .env 并填好密码}
+      REDIS_HOST: redis
+      APP_MILVUS_HOST: milvus
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?请先在 .env 里设置 APP_JWT_SECRET}
+      APP_LLM_BASE_URL: ${APP_LLM_BASE_URL:-https://api.deepseek.com}
+      APP_LLM_API_KEY: ${APP_LLM_API_KEY:-}
+      APP_LLM_MODEL: ${APP_LLM_MODEL:-deepseek-v4-flash-vision-exp}
+      APP_EMBEDDING_BASE_URL: ${APP_EMBEDDING_BASE_URL:-}
+      APP_EMBEDDING_API_KEY: ${APP_EMBEDDING_API_KEY:-}
+      APP_EMBEDDING_MODEL: ${APP_EMBEDDING_MODEL:-BAAI/bge-m3}
+      TZ: Asia/Shanghai
+    ports:
+      - "8080:8080"
+    volumes:
+      - healthkb-backend-data:/app/data
+
+  frontend:
+    profiles: ["app"]
+    build:
+      context: ./frontend
+    container_name: healthkb-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+
 volumes:
   healthkb-mysql-data:
   healthkb-milvus:
+  healthkb-backend-data:

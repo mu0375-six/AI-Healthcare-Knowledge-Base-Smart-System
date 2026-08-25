@@ -115,6 +115,12 @@
             <button class="copper-btn slim" type="button" @click="openMetric">新增指标</button>
           </div>
         </div>
+        <ul v-if="trends.length" class="trend-list">
+          <li v-for="t in trends" :key="t.metricType" :class="{ alert: t.alert }">
+            <span class="dot" :class="t.latestFlag"></span>
+            <span class="note">{{ t.note }}</span>
+          </li>
+        </ul>
         <v-chart v-if="hasChart" :option="chartOption" autoresize style="height: 260px" />
         <div v-else class="quiet">还没有可绘图的指标。点「新增指标」，或去报告解读后写入这份档案。</div>
         <el-table v-if="metrics.length" :data="metrics" class="mt" empty-text="还没有指标">
@@ -247,7 +253,9 @@ import {
   listMetrics,
   listProfiles,
   updateProfileById,
+  listTrends,
 } from '@/api/health'
+import type { MetricTrend } from '@/api/health'
 import { listTerms } from '@/api/knowledge'
 import type { HealthHistory, HealthMetric, HealthProfile } from '@/api/types'
 import { renderMarkdown } from '@/utils/markdown'
@@ -273,6 +281,7 @@ const currentId = ref<number | null>(null)
 const editing = ref(false)
 const form = reactive<HealthProfile>({ displayName: '我', relation: '本人', sharedToAdmin: false })
 const metrics = ref<HealthMetric[]>([])
+const trends = ref<MetricTrend[]>([])
 const histories = ref<HealthHistory[]>([])
 const advice = ref('')
 const adviceBasis = ref('')
@@ -330,6 +339,7 @@ async function select(id: number) {
   const p = profiles.value.find((x) => x.id === id)
   if (p) assignForm(p)
   metrics.value = (await listMetrics(id)).data || []
+  trends.value = (await listTrends(id)).data || []
   histories.value = (await listHistories(id)).data || []
   advice.value = p?.lastAdvice || ''
   adviceBasis.value = p?.adviceAt ? '上次生成于 ' + formatWhen(p.adviceAt) : ''
@@ -414,11 +424,15 @@ async function onAddMetric() {
   await addMetric(payload)
   metricVisible.value = false
   metrics.value = (await listMetrics(currentId.value)).data || []
+  trends.value = (await listTrends(currentId.value)).data || []
 }
 
 async function onDelMetric(id: number) {
   await deleteMetric(id)
-  if (currentId.value) metrics.value = (await listMetrics(currentId.value)).data || []
+  if (currentId.value) {
+    metrics.value = (await listMetrics(currentId.value)).data || []
+    trends.value = (await listTrends(currentId.value)).data || []
+  }
 }
 
 async function onAddHist() {
@@ -480,6 +494,42 @@ const chartOption = computed(() => {
 </script>
 
 <style scoped>
+/* 趋势提示：连续超标的条目单独标红，这是这块最该被一眼看到的信息 */
+.trend-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.trend-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.trend-list li.alert .note {
+  color: #b42318;
+  font-weight: 600;
+}
+.trend-list .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-top: 7px;
+  flex: none;
+  background: var(--ink-3);
+}
+.trend-list .dot.high,
+.trend-list .dot.low {
+  background: #d97706;
+}
+.trend-list .dot.normal {
+  background: #15803d;
+}
+
 .members {
   display: flex;
   gap: 10px;

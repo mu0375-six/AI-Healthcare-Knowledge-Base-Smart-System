@@ -21,6 +21,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 @Slf4j
 @Service
@@ -54,12 +59,11 @@ public class OfficialKnowledgeService {
             result.errors.add("无法读取权威源目录: " + e.getMessage());
             return result;
         }
+        // 先串行走一遍目录，挑出真正需要联网的条目（已入库的直接跳过）。
+        List<Pending> pending = new ArrayList<>();
         for (JsonNode item : catalog) {
             String title = item.path("title").asText("");
             String url = item.path("url").asText("");
-            String publisher = item.path("publisher").asText("");
-            String category = item.path("category").asText("疾病指南");
-            String snapshot = item.path("snapshot").asText("");
             if (title.isBlank() || url.isBlank()) {
                 continue;
             }
@@ -67,36 +71,31 @@ public class OfficialKnowledgeService {
                 result.skipped++;
                 continue;
             }
-            String body = null;
-            String origin;
-            if (allowNetwork) {
-                try {
-                    body = fetchText(url);
-                    if (body != null && body.length() >= 200) {
-                        origin = "live";
-                    } else {
-                        body = null;
-                    }
-                } catch (Exception e) {
-                    log.warn("拉取权威源失败 {}: {}", url, e.getMessage());
-                    result.errors.add(title + " 在线拉取失败，改用快照");
-                    body = null;
-                }
-            }
+            pending.add(new Pending(title, url,
+                    item.path("publisher").asText(""),
+                    item.path("category").asText("疾病指南"),
+                    item.path("snapshot").asText("")));
+        }
+
+        // 抓取并发进行：源有十几个，每个超时 18 秒，串行时首次启动最坏要等好几分钟。
+        // 只并行网络这一段，入库仍然串行 —— 并发写库收益不大，却要额外处理事务与顺序。
+        Map<String, String> fetched = allowNetwork ? fetchAll(pending, result) : Map.of();
+
+        for (Pending item : pending) {
+            String body = fetched.get(item.url());
+            String origin = body == null ? "snapshot" : "live";
             if (body == null) {
-                body = readSnapshot(snapshot);
-                origin = "snapshot";
-            } else {
-                origin = "live";
+                body = readSnapshot(item.snapshot());
             }
             if (body == null || body.isBlank()) {
                 result.failed++;
-                result.errors.add(title + " 无可用正文");
+                result.errors.add(item.title() + " 无可用正文");
                 continue;
             }
-            String source = publisher + " · " + url;
-            knowledgeService.persistDocument(title, category, source, null, body, url, publisher);
-            result.titles.add(title + " [" + origin + "]");
+            String source = item.publisher() + " · " + item.url();
+            knowledgeService.persistDocument(item.title(), item.category(), source, null,
+                    body, item.url(), item.publisher());
+            result.titles.add(item.title() + " [" + origin + "]");
             if ("live".equals(origin)) {
                 result.fetched++;
             } else {
@@ -104,6 +103,58 @@ public class OfficialKnowledgeService {
             }
         }
         return result;
+    }
+
+    /**
+     * 并发抓取待入库的源，返回 url -> 正文。抓不到的条目不出现在结果里，
+     * 由调用方回退到仓库内的快照。
+     *
+     * <p>线程数取源数量与 6 的较小值：目标是把「串行 N×超时」压成「一轮超时」，
+     * 再高的并发对十几个源没有意义，反而容易被对端限流。
+     */
+    private Map<String, String> fetchAll(List<Pending> pending, SyncResult result) {
+        if (pending.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> out = new ConcurrentHashMap<>();
+        int threads = Math.min(6, pending.size());
+        // ExecutorService 到 Java 19 才实现 AutoCloseable，本项目 target 17，用 finally 关
+        ExecutorService pool = Executors.newFixedThreadPool(threads, r -> {
+            Thread t = new Thread(r, "kb-sync");
+            t.setDaemon(true);
+            return t;
+        });
+        try {
+            List<Future<?>> futures = new ArrayList<>();
+            for (Pending item : pending) {
+                futures.add(pool.submit(() -> {
+                    try {
+                        String body = fetchText(item.url());
+                        if (body != null && body.length() >= 200) {
+                            out.put(item.url(), body);
+                        }
+                    } catch (Exception e) {
+                        log.warn("拉取权威源失败 {}: {}", item.url(), e.getMessage());
+                        synchronized (result.errors) {
+                            result.errors.add(item.title() + " 在线拉取失败，改用快照");
+                        }
+                    }
+                }));
+            }
+            for (Future<?> f : futures) {
+                try {
+                    f.get();
+                } catch (Exception ignored) {
+                    // 单个源失败已在任务内记录，这里不再重复处理
+                }
+            }
+        } finally {
+            pool.shutdown();
+        }
+        return out;
+    }
+
+    private record Pending(String title, String url, String publisher, String category, String snapshot) {
     }
 
     public boolean hasOfficialDocuments() {

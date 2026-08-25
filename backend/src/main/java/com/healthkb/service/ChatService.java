@@ -88,15 +88,6 @@ public class ChatService {
         List<ChatMessage> msgs = messageMapper.selectList(new LambdaQueryWrapper<ChatMessage>()
                 .eq(ChatMessage::getSessionId, session.getId())
                 .orderByAsc(ChatMessage::getCreatedAt));
-        for (ChatMessage m : msgs) {
-            if (!"assistant".equalsIgnoreCase(m.getRole())) {
-                continue;
-            }
-            if (m.getCitationsJson() != null && !m.getCitationsJson().isBlank() && !"[]".equals(m.getCitationsJson())) {
-                m.setCitationsJson("[]");
-                messageMapper.updateById(m);
-            }
-        }
         return msgs;
     }
 
@@ -220,20 +211,18 @@ public class ChatService {
                     body = sourced;
                 }
                 if (cacheable) {
-                    saveCache(userId, question, body, List.of());
+                    saveCache(userId, question, body);
                 }
             }
             String full = emergency + body;
 
             assistant.setContent(full);
-            assistant.setCitationsJson("[]");
             messageMapper.updateById(assistant);
             saveContext(session.getId(), history, question, full);
 
             Map<String, Object> done = new HashMap<>();
             done.put("messageId", assistant.getId());
             done.put("fullContent", full);
-            done.put("citations", List.of());
             send(emitter, "done", done);
             emitter.complete();
         } catch (Exception e) {
@@ -241,7 +230,6 @@ public class ChatService {
             String fallback = "生成回答时出现问题，请稍后重试。\n\n" + MedicalConstants.DISCLAIMER;
             try {
                 assistant.setContent(fallback);
-                assistant.setCitationsJson(writeJson(List.of()));
                 messageMapper.updateById(assistant);
                 send(emitter, "error", Map.of("message", "生成回答时出现问题，请稍后重试"));
             } catch (Exception ignored) {
@@ -357,10 +345,7 @@ public class ChatService {
                         .eq(ChatImage::getMessageId, m.getId()));
                 StringBuilder extra = new StringBuilder();
                 for (ChatImage img : imgs) {
-                    if (img.getOcrText() != null && !img.getOcrText().isBlank()) {
-                        extra.append("\n[附图 ").append(img.getFilename()).append(" 识别]\n")
-                                .append(img.getOcrText());
-                    } else if (img.getFilename() != null) {
+                    if (img.getFilename() != null) {
                         extra.append("\n[附图 ").append(img.getFilename()).append("]");
                     }
                 }
@@ -391,10 +376,10 @@ public class ChatService {
         }
     }
 
-    private void saveCache(Long userId, String question, String content, List<Citation> citations) {
+    private void saveCache(Long userId, String question, String content) {
         try {
             cacheService.set(cacheKey(userId, question),
-                    objectMapper.writeValueAsString(new CachedAnswer(content, citations)),
+                    objectMapper.writeValueAsString(new CachedAnswer(content)),
                     Duration.ofMinutes(cacheTtlMinutes));
         } catch (Exception ignored) {
         }
@@ -402,23 +387,11 @@ public class ChatService {
 
     private static String cacheKey(Long userId, String question) {
         String norm = question.toLowerCase().replaceAll("\\s+", "");
-        return "qa:v5:" + userId + ":" + DigestUtil.md5Hex(norm);
+        return "qa:v6:" + userId + ":" + DigestUtil.md5Hex(norm);
     }
 
     private void send(SseEmitter emitter, String event, Object data) throws IOException {
         emitter.send(SseEmitter.event().name(event).data(data));
-    }
-
-    private List<Citation> readCitations(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return List.of();
-        }
-        try {
-            return objectMapper.readValue(raw, new TypeReference<List<Citation>>() {
-            });
-        } catch (Exception e) {
-            return List.of();
-        }
     }
 
     private String writeJson(Object o) {
@@ -433,6 +406,6 @@ public class ChatService {
         return s.length() <= n ? s : s.substring(0, n) + "…";
     }
 
-    public record CachedAnswer(String content, List<Citation> citations) {
+    public record CachedAnswer(String content) {
     }
 }

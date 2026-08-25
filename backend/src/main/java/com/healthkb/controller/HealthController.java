@@ -1,13 +1,17 @@
 package com.healthkb.controller;
 
 import com.healthkb.common.ApiResponse;
+import com.healthkb.common.RateLimiter;
+import com.healthkb.security.SecurityUtils;
 import com.healthkb.dto.HealthDtos;
 import com.healthkb.entity.HealthHistory;
 import com.healthkb.entity.HealthMetric;
 import com.healthkb.entity.HealthProfile;
 import com.healthkb.service.HealthService;
+import com.healthkb.service.MetricTrendAnalyzer;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +32,13 @@ import java.util.Map;
 public class HealthController {
 
     private final HealthService healthService;
+    private final RateLimiter rateLimiter;
+
+    @Value("${app.rate-limit.advice.limit:10}")
+    private int adviceLimit;
+
+    @Value("${app.rate-limit.advice.window-seconds:60}")
+    private int adviceWindowSeconds;
 
     @GetMapping("/profiles")
     public ApiResponse<List<HealthProfile>> profiles() {
@@ -91,8 +103,16 @@ public class HealthController {
         return ApiResponse.ok();
     }
 
+    @GetMapping("/trends")
+    public ApiResponse<List<MetricTrendAnalyzer.Trend>> trends(
+            @RequestParam(value = "profileId", required = false) Long profileId) {
+        return ApiResponse.ok(healthService.trends(profileId));
+    }
+
     @PostMapping("/advice")
     public ApiResponse<Map<String, String>> advice(@RequestParam(value = "profileId", required = false) Long profileId) {
+        rateLimiter.require("health-advice", SecurityUtils.currentUserId(), adviceLimit,
+                Duration.ofSeconds(adviceWindowSeconds), "生成建议太频繁了，请稍后再试");
         return ApiResponse.ok(healthService.advice(profileId));
     }
 }

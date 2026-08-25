@@ -19,12 +19,6 @@ export interface ChatSession {
   updatedAt: string
 }
 
-export interface Citation {
-  title: string
-  source: string
-  snippet: string
-  category?: string
-}
 
 export interface ChatAttachment {
   id: number
@@ -38,7 +32,6 @@ export interface ChatMessage {
   userId: number
   role: 'user' | 'assistant'
   content: string
-  citationsJson?: string
   attachmentsJson?: string
   createdAt: string
   localPreviews?: string[]

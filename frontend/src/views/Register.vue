@@ -96,4 +96,16 @@ h2 {
 .switch {
   margin-top: 18px;
 }
+
+@media (max-width: 720px) {
+  .auth {
+    padding: 20px 12px;
+  }
+  .box {
+    padding: 24px 18px;
+  }
+  h2 {
+    font-size: 24px;
+  }
+}
 </style>

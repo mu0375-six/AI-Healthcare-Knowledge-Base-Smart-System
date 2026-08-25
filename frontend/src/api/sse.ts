@@ -1,11 +1,9 @@
-import type { Citation } from './types'
 import { clearSessionAndRedirect } from './http'
 
 export interface AskHandlers {
   onMeta?: (data: { messageId: number; sessionId: number }) => void
   onDelta?: (content: string) => void
-  onCitation?: (c: Citation) => void
-  onDone?: (data: { messageId: number; fullContent: string; citations: Citation[] }) => void
+  onDone?: (data: { messageId: number; fullContent: string }) => void
   onError?: (message: string) => void
 }
 
@@ -70,9 +68,8 @@ function dispatchBlock(block: string, handlers: AskHandlers) {
   else if (event === 'delta') {
     const obj = payload as { content?: string }
     handlers.onDelta?.(typeof payload === 'string' ? payload : obj.content || '')
-  } else if (event === 'citation') handlers.onCitation?.(payload as Citation)
-  else if (event === 'done') {
-    handlers.onDone?.(payload as { messageId: number; fullContent: string; citations: Citation[] })
+  } else if (event === 'done') {
+    handlers.onDone?.(payload as { messageId: number; fullContent: string })
   } else if (event === 'error') {
     const obj = payload as { message?: string }
     handlers.onError?.(obj.message || '生成失败')

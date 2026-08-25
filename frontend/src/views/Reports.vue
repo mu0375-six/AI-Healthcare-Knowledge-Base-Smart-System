@@ -133,4 +133,22 @@ function open(row: ExamReport) {
   color: var(--ink-3);
   font-size: 13px;
 }
+
+@media (max-width: 720px) {
+  .drop {
+    padding: 18px 16px 16px;
+  }
+  .drop h3 {
+    font-size: 20px;
+  }
+  .block h3 {
+    font-size: 17px;
+  }
+  /* 文件名与时间在窄屏挤成一行会互相压扁，改为换行堆叠 */
+  .rep {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 12px 14px;
+  }
+}
 </style>
