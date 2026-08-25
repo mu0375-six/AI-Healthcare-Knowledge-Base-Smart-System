@@ -1,0 +1,86 @@
+[
+  {
+    "title": "高血压",
+    "category": "疾病指南",
+    "publisher": "世界卫生组织",
+    "url": "https://www.who.int/zh/news-room/fact-sheets/detail/hypertension",
+    "snapshot": "who-hypertension.txt"
+  },
+  {
+    "title": "糖尿病",
+    "category": "疾病指南",
+    "publisher": "世界卫生组织",
+    "url": "https://www.who.int/zh/news-room/fact-sheets/detail/diabetes",
+    "snapshot": "who-diabetes.txt"
+  },
+  {
+    "title": "心血管疾病",
+    "category": "疾病指南",
+    "publisher": "世界卫生组织",
+    "url": "https://www.who.int/zh/news-room/fact-sheets/detail/cardiovascular-diseases-(cvds)",
+    "snapshot": "who-cvd.txt"
+  },
+  {
+    "title": "季节性流感",
+    "category": "疾病指南",
+    "publisher": "世界卫生组织",
+    "url": "https://www.who.int/zh/news-room/fact-sheets/detail/influenza-(seasonal)",
+    "snapshot": "who-influenza.txt"
+  },
+  {
+    "title": "健康饮食",
+    "category": "疾病指南",
+    "publisher": "世界卫生组织",
+    "url": "https://www.who.int/zh/news-room/fact-sheets/detail/healthy-diet",
+    "snapshot": "who-healthy-diet.txt"
+  },
+  {
+    "title": "身体活动",
+    "category": "疾病指南",
+    "publisher": "世界卫生组织",
+    "url": "https://www.who.int/zh/news-room/fact-sheets/detail/physical-activity",
+    "snapshot": "who-physical-activity.txt"
+  },
+  {
+    "title": "超重和肥胖",
+    "category": "疾病指南",
+    "publisher": "世界卫生组织",
+    "url": "https://www.who.int/zh/news-room/fact-sheets/detail/obesity-and-overweight",
+    "snapshot": "who-obesity.txt"
+  },
+  {
+    "title": "减少钠摄入",
+    "category": "疾病指南",
+    "publisher": "世界卫生组织",
+    "url": "https://www.who.int/zh/news-room/fact-sheets/detail/sodium-reduction",
+    "snapshot": "who-sodium.txt"
+  },
+  {
+    "title": "哮喘",
+    "category": "疾病指南",
+    "publisher": "世界卫生组织",
+    "url": "https://www.who.int/zh/news-room/fact-sheets/detail/asthma",
+    "snapshot": "who-asthma.txt"
+  },
+  {
+    "title": "慢性阻塞性肺病",
+    "category": "疾病指南",
+    "publisher": "世界卫生组织",
+    "url": "https://www.who.int/zh/news-room/fact-sheets/detail/chronic-obstructive-pulmonary-disease-(copd)",
+    "snapshot": "who-copd.txt"
+  },
+  {
+    "title": "心脑血管疾病防治行动实施方案（2023—2030年）",
+    "category": "政策规范",
+    "publisher": "中华人民共和国国家卫生健康委员会",
+    "url": "https://www.nhc.gov.cn/wjw/c100375/202311/547c69afe3364649a730dcc9e69d231c.shtml",
+    "snapshot": "nhc-cvd-action.txt"
+  },
+  {
+    "title": "出生缺陷防治健康教育核心信息",
+    "category": "政策规范",
+    "publisher": "中华人民共和国国家卫生健康委员会",
+    "url": "https://www.nhc.gov.cn/fys/c100078/201909/e4047cc2102649b1bc2d6c1101481dc5.shtml",
+    "snapshot": "nhc-birth-defect.txt"
+  }
+]

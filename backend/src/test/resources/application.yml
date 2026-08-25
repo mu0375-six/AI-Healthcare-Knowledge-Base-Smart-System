@@ -1,0 +1,77 @@
+spring:
+  ai:
+    openai:
+      base-url: http://localhost:9
+      api-key: test-key
+    model:
+      chat: openai
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:healthkb_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+      encoding: UTF-8
+      continue-on-error: true
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 1
+      timeout: 50ms
+      connect-timeout: 50ms
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
+app:
+  # 测试不配 embedding：走 EmbeddingService 哈希兜底，不发外网请求
+  embedding:
+    base-url:
+    api-key:
+  llm:
+    base-url:
+    api-key:
+  kb:
+    allow-network: false
+    timeout-seconds: 5
+  rag:
+    top-k: 5
+    min-score: 0.0
+    context-turns: 6
+    cache-ttl-minutes: 10
+    context-cache-minutes: 30
+    chunk-size: 600
+    chunk-overlap: 80
+    embedding-dim: 256
+  milvus:
+    enabled: false
+    host: 127.0.0.1
+    port: 19530
+    collection: healthkb_chunks_test
+
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 86400
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  # token-style 对 JWT 模式无效，token 由 StpLogicJwtConfig 注册的 StpLogicJwtForSimple 生成
+  jwt-secret-key: test-hs256-secret-key-please-change-in-prod-2026!!
+  is-log: false
+  is-read-cookie: false
+  is-read-header: true
+  is-read-body: false

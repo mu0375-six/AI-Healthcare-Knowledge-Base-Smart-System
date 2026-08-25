@@ -1,0 +1,66 @@
+# 基础设施。MySQL 是默认数据源；完全离线时用 H2 profile：
+#   mvn spring-boot:run -Dspring-boot.run.profiles=h2
+# Redis 与 Milvus 都可缺省，连不上会自动降级（内存缓存 / 内存向量库）。
+#   docker compose -p healthkb up -d redis milvus
+#
+# Milvus 使用官方 standalone 内嵌 etcd + 本地存储，避免再拉 quay/minio（国内经常失败）。
+# 镜像可先走国内源再打回官方名：
+#   docker pull docker.1ms.run/milvusdb/milvus:v2.4.9
+#   docker tag docker.1ms.run/milvusdb/milvus:v2.4.9 milvusdb/milvus:v2.4.9
+
+name: healthkb
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: healthkb-mysql
+    restart: unless-stopped
+    environment:
+      # 取自项目根目录的 .env（不入库，见 .env.example）。未配置时 compose 直接报错，
+      # 避免把密码写死在仓库里。
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请先 copy .env.example .env 并填好密码}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-healthkb}
+      MYSQL_USER: ${MYSQL_USER:-healthkb}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请先 copy .env.example .env 并填好密码}
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - healthkb-mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: healthkb-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  milvus:
+    image: milvusdb/milvus:v2.4.9
+    container_name: healthkb-milvus
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
+      ETCD_CONFIG_PATH: /milvus/configs/embedEtcd.yaml
+      COMMON_STORAGETYPE: local
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - healthkb-milvus:/var/lib/milvus
+      - ./deploy/milvus/embedEtcd.yaml:/milvus/configs/embedEtcd.yaml
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 90s
+
+volumes:
+  healthkb-mysql-data:
+  healthkb-milvus:

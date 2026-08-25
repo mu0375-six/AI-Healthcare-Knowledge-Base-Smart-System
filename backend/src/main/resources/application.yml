@@ -1,0 +1,125 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  # 敏感配置（数据库密码、JWT 密钥、各类 API Key）一律从环境变量读取，
+  # 仓库内不留默认值。本地开发把它们写进项目根目录的 .env（不入库，
+  # 见 .env.example）；两条路径分别对应「从 backend/ 跑」和「从项目根跑」。
+  config:
+    import:
+      - optional:file:./.env[.properties]
+      - optional:file:../.env[.properties]
+  application:
+    name: health-kb
+  ai:
+    openai:
+      base-url: ${APP_LLM_BASE_URL:https://api.deepseek.com}
+      api-key: ${APP_LLM_API_KEY:}
+      chat:
+        options:
+          model: ${APP_LLM_MODEL:deepseek-v4-flash-vision-exp}
+          temperature: 0.35
+    model:
+      chat: openai
+      # 保持 none：embedding 由 AiConfig#medicalEmbeddingModel 手工构建
+      # （DeepSeek 无 embedding 端点，需独立 base-url，见 app.embedding）
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/healthkb?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${MYSQL_USER:healthkb}
+    password: ${MYSQL_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 400ms
+      connect-timeout: 400ms
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+      encoding: UTF-8
+      continue-on-error: true
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    db-config:
+      id-type: auto
+      table-underline: true
+  mapper-locations: classpath*:/mapper/**/*.xml
+
+app:
+  llm:
+    base-url: ${APP_LLM_BASE_URL:https://api.deepseek.com}
+    api-key: ${APP_LLM_API_KEY:}
+    model: ${APP_LLM_MODEL:deepseek-v4-flash-vision-exp}
+    timeout-seconds: 90
+  chat:
+    image-dir: ${APP_CHAT_IMAGE_DIR:./data/chat-images}
+  kb:
+    allow-network: ${APP_KB_ALLOW_NETWORK:true}
+    timeout-seconds: 18
+  # 医学知识向量化。DeepSeek 无 embedding 端点，需单独配一个 OpenAI 兼容的
+  # embedding 服务（如硅基流动 BAAI/bge-m3、阿里百炼 text-embedding-v3）。
+  # 不配则自动回退 EmbeddingService 的哈希向量（无语义能力，仅保证离线可演示）。
+  embedding:
+    base-url: ${APP_EMBEDDING_BASE_URL:}
+    api-key: ${APP_EMBEDDING_API_KEY:}
+    model: ${APP_EMBEDDING_MODEL:BAAI/bge-m3}
+    timeout-seconds: 30
+  rag:
+    top-k: 5
+    min-score: 0.0
+    context-turns: 6
+    cache-ttl-minutes: 10
+    context-cache-minutes: 30
+    chunk-size: 600
+    chunk-overlap: 80
+    embedding-dim: 256
+  milvus:
+    enabled: ${APP_MILVUS_ENABLED:true}
+    host: ${APP_MILVUS_HOST:localhost}
+    port: ${APP_MILVUS_PORT:19530}
+    collection: ${APP_MILVUS_COLLECTION:healthkb_chunks}
+
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 86400
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  # token-style 对 JWT 模式无效，token 由 StpLogicJwtConfig 注册的 StpLogicJwtForSimple 生成
+  jwt-secret-key: ${APP_JWT_SECRET}
+  is-log: false
+  is-read-cookie: false
+  is-read-header: true
+  is-read-body: false
+
+logging:
+  level:
+    com.healthkb: INFO
+    org.springframework.security: WARN
+    org.apache.tika: WARN

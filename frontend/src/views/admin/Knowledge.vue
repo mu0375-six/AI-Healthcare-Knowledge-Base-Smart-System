@@ -1,0 +1,165 @@
+<template>
+  <div class="page">
+    <PageHeader title="知识库" desc="优先接入世界卫生组织、国家卫生健康委等权威公开文本，也可继续上传或录入。" />
+
+    <section class="sheet sheet-pad sync">
+      <div>
+        <h3>权威源同步</h3>
+        <p>从 WHO 实况报道、国家卫健委公开文件拉取；网络不通时使用已核对的官方文本快照。</p>
+      </div>
+      <button class="copper-btn" type="button" :disabled="syncing" @click="doSync">
+        {{ syncing ? '同步中…' : '从权威源同步' }}
+      </button>
+    </section>
+
+    <section class="sheet sheet-pad block">
+      <el-tabs>
+        <el-tab-pane label="上传文件">
+          <el-form label-width="80px">
+            <el-form-item label="文件">
+              <el-upload :auto-upload="false" :limit="1" :on-change="onFile" accept=".pdf,.doc,.docx,.txt">
+                <el-button>选择 PDF / Word / txt</el-button>
+              </el-upload>
+            </el-form-item>
+            <el-form-item label="标题"><el-input v-model="upload.title" /></el-form-item>
+            <el-form-item label="分类">
+              <el-select v-model="upload.category">
+                <el-option label="疾病指南" value="疾病指南" />
+                <el-option label="药品说明" value="药品说明" />
+                <el-option label="科室导诊" value="科室导诊" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="来源"><el-input v-model="upload.source" /></el-form-item>
+            <el-button type="primary" :disabled="!file" :loading="uploading" @click="doUpload">导入并向量化</el-button>
+          </el-form>
+        </el-tab-pane>
+        <el-tab-pane label="录入文本">
+          <el-form label-width="80px">
+            <el-form-item label="标题"><el-input v-model="text.title" /></el-form-item>
+            <el-form-item label="分类">
+              <el-select v-model="text.category">
+                <el-option label="疾病指南" value="疾病指南" />
+                <el-option label="药品说明" value="药品说明" />
+                <el-option label="科室导诊" value="科室导诊" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="来源"><el-input v-model="text.source" /></el-form-item>
+            <el-form-item label="正文"><el-input v-model="text.content" type="textarea" :rows="8" /></el-form-item>
+            <el-button type="primary" :loading="saving" @click="doText">写入知识库</el-button>
+          </el-form>
+        </el-tab-pane>
+      </el-tabs>
+    </section>
+
+    <section class="sheet sheet-pad block">
+      <h3>已入库文档</h3>
+      <el-table :data="docs" empty-text="暂无文档">
+        <el-table-column prop="title" label="标题" min-width="160" />
+        <el-table-column prop="publisher" label="发布机构" width="220" />
+        <el-table-column prop="category" label="分类" width="110" />
+        <el-table-column label="原文" min-width="220">
+          <template #default="{ row }">
+            <a v-if="row.sourceUrl" :href="row.sourceUrl" target="_blank" rel="noopener">{{ row.sourceUrl }}</a>
+            <span v-else>{{ row.source }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="createdAt" label="时间" width="180" />
+        <el-table-column label="" width="90">
+          <template #default="{ row }">
+            <el-button text type="danger" @click="remove(row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </section>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, reactive, ref } from 'vue'
+import type { UploadFile } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { addKnowledgeText, deleteKnowledge, listKnowledge, syncOfficialKnowledge, uploadKnowledge } from '@/api/knowledge'
+import type { KbDocument } from '@/api/types'
+import PageHeader from '@/components/PageHeader.vue'
+
+const docs = ref<KbDocument[]>([])
+const file = ref<File | null>(null)
+const uploading = ref(false)
+const saving = ref(false)
+const syncing = ref(false)
+const upload = reactive({ title: '', category: '疾病指南', source: '' })
+const text = reactive({ title: '', category: '疾病指南', source: '后台录入', content: '' })
+
+onMounted(load)
+
+async function load() {
+  docs.value = (await listKnowledge()).data || []
+}
+
+function onFile(f: UploadFile) {
+  file.value = (f.raw as File) || null
+}
+
+async function doUpload() {
+  if (!file.value) return
+  uploading.value = true
+  try {
+    await uploadKnowledge(file.value, { ...upload })
+    ElMessage.success('已导入')
+    await load()
+  } finally {
+    uploading.value = false
+  }
+}
+
+async function doText() {
+  saving.value = true
+  try {
+    await addKnowledgeText({ ...text })
+    ElMessage.success('已写入')
+    text.content = ''
+    await load()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function doSync() {
+  syncing.value = true
+  try {
+    const res = await syncOfficialKnowledge(true)
+    const d = res.data
+    ElMessage.success(`同步完成：在线 ${d.fetched}，快照 ${d.fromSnapshot}，跳过 ${d.skipped}，清理演示 ${d.removedDemo}`)
+    await load()
+  } finally {
+    syncing.value = false
+  }
+}
+
+async function remove(id: number) {
+  await deleteKnowledge(id)
+  await load()
+}
+</script>
+
+<style scoped>
+.sync {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.sync h3,
+.block h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+.sync p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.block {
+  margin-top: 14px;
+}
+</style>

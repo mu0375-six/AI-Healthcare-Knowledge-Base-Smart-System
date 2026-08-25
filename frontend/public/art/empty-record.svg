@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 440" width="560" height="440" role="img" aria-label="尚无记录">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0%" stop-color="#f6efe3"/>
+      <stop offset="55%" stop-color="#ece2d2"/>
+      <stop offset="100%" stop-color="#e2d6c3"/>
+    </linearGradient>
+
+    <pattern id="chart-fine" width="20" height="20" patternUnits="userSpaceOnUse">
+      <path d="M20 0H0V20" fill="none" stroke="#8a7a5f" stroke-width="0.5" stroke-opacity="0.16"/>
+    </pattern>
+    <pattern id="chart-coarse" width="100" height="100" patternUnits="userSpaceOnUse">
+      <path d="M100 0H0V100" fill="none" stroke="#8a7a5f" stroke-width="1" stroke-opacity="0.2"/>
+    </pattern>
+  </defs>
+
+  <rect width="560" height="440" fill="url(#paper)"/>
+  <rect width="560" height="440" fill="url(#chart-fine)"/>
+  <rect width="560" height="440" fill="url(#chart-coarse)"/>
+
+  <!-- 坐标轴 -->
+  <path d="M70 60V370H500" fill="none" stroke="#6d7671" stroke-width="1.6" stroke-opacity="0.5" stroke-linecap="round"/>
+
+  <!-- 已有的一个起点，之后是待补的虚线：意思是「从这里开始记录」 -->
+  <path d="M70 300 L150 268" fill="none" stroke="#c45d3a" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M150 268 L240 288 L330 214 L420 236 L490 168"
+        fill="none" stroke="#c45d3a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
+        stroke-opacity="0.42" stroke-dasharray="7 9"/>
+
+  <!-- 已记录的点为实心，待记录的点为空心 -->
+  <circle cx="70" cy="300" r="6" fill="#c45d3a"/>
+  <circle cx="150" cy="268" r="6" fill="#c45d3a"/>
+  <g fill="#f6efe3" stroke="#c45d3a" stroke-width="1.8" stroke-opacity="0.45">
+    <circle cx="240" cy="288" r="5.5"/>
+    <circle cx="330" cy="214" r="5.5"/>
+    <circle cx="420" cy="236" r="5.5"/>
+    <circle cx="490" cy="168" r="5.5"/>
+  </g>
+</svg>

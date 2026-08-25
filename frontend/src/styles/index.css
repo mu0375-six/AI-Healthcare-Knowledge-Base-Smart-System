@@ -1,0 +1,328 @@
+:root {
+  --ink: #161d1a;
+  --ink-2: #3b4540;
+  --ink-3: #6d7671;
+  --paper: #f2ece2;
+  --paper-deep: #e6ddd0;
+  --card: #faf6ef;
+  --cream: #fffaf3;
+  --line: rgba(22, 29, 26, 0.1);
+  --line-strong: rgba(22, 29, 26, 0.16);
+  --moss: #2c5648;
+  --moss-deep: #17342b;
+  --rail: #13231d;
+  --copper: #c45d3a;
+  --copper-deep: #9b3f24;
+  --gold: #b8965a;
+  --danger: #a32d22;
+  --ok: #2c5648;
+  --warn: #b45309;
+  --shadow: 0 18px 48px rgba(20, 28, 24, 0.08);
+  --font-serif: 'Noto Serif SC', 'Songti SC', 'STSong', serif;
+  --font-sans: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  /* 圆角只有四档，按元素体量选，不要另起新值：
+     panel 页面级面板 / card 重复单元 / control 控件与缩略图 / chip 行内标记 */
+  --r-panel: 20px;
+  --r-card: 14px;
+  --r-control: 10px;
+  --r-chip: 4px;
+
+  --nav: 228px;
+
+  --el-color-primary: #c45d3a;
+  --el-color-primary-light-3: #d67c5d;
+  --el-color-primary-light-5: #e4a48e;
+  --el-color-primary-light-7: #f0c8ba;
+  --el-color-primary-light-8: #f6ddd4;
+  --el-color-primary-light-9: #fbf0eb;
+  --el-color-primary-dark-2: #9b3f24;
+  --el-color-success: #2c5648;
+  --el-color-warning: #b45309;
+  --el-color-danger: #a32d22;
+  --el-font-family: var(--font-sans);
+  --el-border-radius-base: 10px; /* = --r-control，Element Plus 需要字面值 */
+  --el-border-color: var(--line-strong);
+  --el-fill-color-blank: var(--cream);
+  --el-bg-color: var(--card);
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--ink-2);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 40;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+a {
+  color: var(--copper);
+  text-decoration: none;
+}
+
+button,
+input,
+textarea {
+  font-family: inherit;
+}
+
+h1,
+h2,
+h3,
+.serif {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-bottom: 40px;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.page-head h2 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.page-head p {
+  margin: 8px 0 0;
+  color: var(--ink-3);
+  font-size: 14px;
+  line-height: 1.65;
+  max-width: 560px;
+}
+
+/* 表面分三级，靠「阴影只出现在最外层」拉开主次，不要层层叠白卡片。
+   一级 .sheet   页面主面板，全站只有它带阴影
+   二级 .card    直接铺在页面上的重复单元，无阴影、圆角更小
+   三级          面板「内部」的块不再发卡片：用细分隔线（.row / .hit）
+                 或更深的纸色做凹陷（Chat 气泡），绝不叠更白的一层 */
+
+.sheet {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  box-shadow: var(--shadow);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  transition: border-color 0.15s ease;
+}
+
+.sheet-pad {
+  padding: 22px 24px;
+}
+
+.disclaimer {
+  margin-top: 22px;
+  padding: 12px 14px;
+  border-radius: var(--r-control);
+  background: rgba(180, 83, 9, 0.08);
+  color: #8a4b12;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.med-term {
+  background: rgba(196, 93, 58, 0.12);
+  color: var(--copper-deep);
+  padding: 0 3px;
+  border-radius: var(--r-chip);
+}
+
+.markdown-body {
+  line-height: 1.8;
+  word-break: break-word;
+  color: var(--ink-2);
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  color: var(--ink);
+  font-family: var(--font-serif);
+  margin: 0.85em 0 0.4em;
+}
+
+.markdown-body p {
+  margin: 0.45em 0;
+}
+
+.markdown-body ul {
+  padding-left: 1.2em;
+}
+
+.markdown-body code {
+  background: var(--paper-deep);
+  padding: 1px 5px;
+  border-radius: var(--r-chip);
+}
+
+.katex-display {
+  overflow-x: auto;
+}
+
+/* 空状态整块：页面级，套面板规格（此前 Health 是 22px 卡片、Favorites 干脆没样式） */
+.empty-sheet {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  overflow: hidden;
+}
+
+.empty-wrap {
+  padding: 36px 12px;
+  text-align: center;
+  color: var(--ink-3);
+}
+
+.flag-high {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.flag-low {
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.ghost-btn,
+.copper-btn,
+.ink-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 14px;
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.copper-btn,
+a.copper-btn {
+  background: var(--copper);
+  color: #fff8f3;
+  box-shadow: 0 8px 20px rgba(196, 93, 58, 0.24);
+}
+
+.copper-btn:hover {
+  background: var(--copper-deep);
+}
+
+.ink-btn {
+  background: var(--moss-deep);
+  color: #f3eee4;
+}
+
+.ghost-btn {
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--line-strong);
+}
+
+.copper-btn:active,
+.ink-btn:active,
+.ghost-btn:active {
+  transform: translateY(1px);
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--copper);
+  --el-button-border-color: var(--copper);
+  --el-button-hover-bg-color: var(--copper-deep);
+  --el-button-hover-border-color: var(--copper-deep);
+  --el-button-active-bg-color: var(--copper-deep);
+}
+
+.el-card {
+  --el-card-bg-color: var(--card);
+  --el-card-border-color: var(--line);
+  border-radius: var(--r-panel) !important;
+  overflow: hidden;
+}
+
+.el-dialog {
+  border-radius: var(--r-panel) !important;
+  background: var(--cream) !important;
+}
+
+.el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-header-bg-color: rgba(22, 29, 26, 0.03);
+  --el-table-row-hover-bg-color: rgba(196, 93, 58, 0.05);
+}
+
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  box-shadow: 0 0 0 1px var(--line-strong) inset !important;
+  background: var(--cream) !important;
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--copper) inset !important;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(22, 29, 26, 0.18);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+@media (max-width: 860px) {
+  .page-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .page-head h2 {
+    font-size: 26px;
+  }
+}
