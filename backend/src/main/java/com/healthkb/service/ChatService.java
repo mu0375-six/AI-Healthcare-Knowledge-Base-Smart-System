@@ -7,6 +7,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import com.healthkb.cache.CacheService;
 import com.healthkb.common.AppException;
+import com.healthkb.common.EmergencyRules;
 import com.healthkb.common.MedicalConstants;
 import com.healthkb.entity.ChatImage;
 import com.healthkb.entity.ChatMessage;
@@ -182,10 +183,18 @@ public class ChatService {
             List<ChatTurn> history = cachedHistory(session.getId(), assistant.getId(), userMsgId);
             boolean cacheable = history.isEmpty() && (images == null || images.isEmpty()) && profileId == null;
             CachedAnswer cached = cacheable ? loadCache(userId, question) : null;
-            String full;
+            // 急症提示走确定性规则，先于模型输出发出去：命中时用户第一眼看到的
+            // 就是「打 120」，而不是等模型把一段科普讲完。该提示不进缓存 ——
+            // 它只由问题本身决定，每次按当前问题重新判定即可。
+            String emergency = EmergencyRules.banner(question);
+            if (!emergency.isEmpty()) {
+                send(emitter, "delta", Map.of("content", emergency));
+            }
+
+            String body;
             if (cached != null) {
-                full = cached.content;
-                streamCached(emitter, full);
+                body = cached.content;
+                streamCached(emitter, body);
             } else {
                 String retrieveQuery = extra.isBlank() ? question : question + "\n" + extra;
                 List<ScoredChunk> chunks = ragService.retrieve(retrieveQuery);
@@ -199,21 +208,22 @@ public class ChatService {
                         throw new RuntimeException(e);
                     }
                 });
-                full = acc.toString();
-                if (full.isBlank()) {
-                    full = "暂时无法生成回答，请稍后重试。\n\n" + MedicalConstants.DISCLAIMER;
-                    send(emitter, "delta", Map.of("content", full));
+                body = acc.toString();
+                if (body.isBlank()) {
+                    body = "暂时无法生成回答，请稍后重试。\n\n" + MedicalConstants.DISCLAIMER;
+                    send(emitter, "delta", Map.of("content", body));
                 }
                 List<Citation> citations = ragService.visibleCitations(question, ragService.toCitations(chunks));
-                String sourced = withSources(full, citations);
-                if (!sourced.equals(full)) {
-                    send(emitter, "delta", Map.of("content", sourced.substring(full.length())));
-                    full = sourced;
+                String sourced = withSources(body, citations);
+                if (!sourced.equals(body)) {
+                    send(emitter, "delta", Map.of("content", sourced.substring(body.length())));
+                    body = sourced;
                 }
                 if (cacheable) {
-                    saveCache(userId, question, full, List.of());
+                    saveCache(userId, question, body, List.of());
                 }
             }
+            String full = emergency + body;
 
             assistant.setContent(full);
             assistant.setCitationsJson("[]");

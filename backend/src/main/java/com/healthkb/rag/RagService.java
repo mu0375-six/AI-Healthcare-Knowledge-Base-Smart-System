@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,6 +33,18 @@ public class RagService {
 
     @Value("${app.rag.top-k:5}")
     private int topK;
+
+    /** 重排时词法特异度占的权重，其余给向量分。仅在真实 embedding 模式下生效。 */
+    @Value("${app.rag.rerank.lexical-weight:0.3}")
+    private double lexicalWeight;
+
+    /**
+     * 重排后的保留阈值：综合分低于它就判定「知识库对不上」。
+     * 该值与 embedding 模型的分数分布有关，换模型后需重新标定 ——
+     * 用 GET /api/knowledge/vectors/inspect?q=... 看 combined 一列即可。
+     */
+    @Value("${app.rag.rerank.min-score:0.55}")
+    private double rerankMinScore;
 
     public int vectorCount() {
         return vectorStore.size();
@@ -55,6 +68,11 @@ public class RagService {
         out.put("store", storeInfo());
         out.put("dim", vectorizeService.dimension());
         out.put("semantic", vectorizeService.semantic());
+        // 检索模式与两个旋钮一并回传：换 embedding 模型后照着 combined 一列重新标定阈值
+        out.put("mode", vectorizeService.semantic() ? "rerank" : "lexical-filter");
+        out.put("lexicalWeight", lexicalWeight);
+        out.put("rerankMinScore", rerankMinScore);
+        out.put("queryTerms", queryTerms(query));
         out.put("rawHits", toMaps(raw, query));
         out.put("keptHits", toMaps(kept, query));
         return out;
@@ -72,11 +90,17 @@ public class RagService {
             row.put("source", h.getSource() == null ? "" : h.getSource());
             String sn = h.getContent() == null ? "" : h.getContent();
             row.put("snippet", sn.length() > 180 ? sn.substring(0, 180) + "…" : sn);
-            row.put("score", Math.round(h.getScore() * 10000.0) / 10000.0);
+            row.put("score", round4(h.getScore()));
             row.put("lexicalHit", sharesTerm(keys, h));
+            row.put("lexicalScore", round4(lexicalScore(keys, h)));
+            row.put("combined", round4(combinedScore(h, keys, lexicalWeight)));
             rows.add(row);
         }
         return rows;
+    }
+
+    private static double round4(double v) {
+        return Math.round(v * 10000.0) / 10000.0;
     }
 
     public List<ScoredChunk> retrieve(String query) {
@@ -88,15 +112,28 @@ public class RagService {
         if (query == null || query.isBlank()) {
             return List.of();
         }
-        // 召回交给 LangChain4j 的 ContentRetriever（向量检索 → Milvus/内存库），
-        // 再用关键词精排截断到 k：哈希兜底模式下这一步是召回质量的主要保障。
+        List<ScoredChunk> hits = recall(query);
+        List<String> keys = queryTerms(query);
+        // 两种模式分开处理：
+        // 哈希兜底时向量分不含语义，相关性只能靠字面命中兜住，保持硬过滤；
+        // 换成真实 embedding 后向量分可信，字面命中降级为重排信号 —— 否则
+        // 「心梗」永远匹配不上正文里的「心肌梗死」，语义检索的收益会被这一步抵消掉。
+        return vectorizeService.semantic() ? rerank(hits, keys, k) : lexicalFilter(hits, keys, k);
+    }
+
+    /** 召回：交给 LangChain4j 的 ContentRetriever（向量检索 → Milvus/内存库）。 */
+    private List<ScoredChunk> recall(String query) {
         List<ScoredChunk> hits = new ArrayList<>();
         for (Content content : contentRetriever.retrieve(Query.from(query))) {
             Object score = content.metadata().get(ContentMetadata.SCORE);
             double s = score instanceof Number n ? n.doubleValue() : 0d;
             hits.add(VectorStoreEmbeddingStore.toChunk(content.textSegment(), s));
         }
-        List<String> keys = queryTerms(query);
+        return hits;
+    }
+
+    /** 哈希兜底模式：字面不沾边的一律丢弃，宁可少召回也不要串台。 */
+    private static List<ScoredChunk> lexicalFilter(List<ScoredChunk> hits, List<String> keys, int k) {
         List<ScoredChunk> filtered = new ArrayList<>();
         for (ScoredChunk hit : hits) {
             if (!sharesTerm(keys, hit)) {
@@ -108,6 +145,56 @@ public class RagService {
             }
         }
         return filtered;
+    }
+
+    /** 真实 embedding 模式：按综合分重排，低于阈值才判定检索不到。 */
+    private List<ScoredChunk> rerank(List<ScoredChunk> hits, List<String> keys, int k) {
+        List<ScoredChunk> ranked = new ArrayList<>(hits);
+        ranked.sort(Comparator
+                .comparingDouble((ScoredChunk h) -> combinedScore(h, keys, lexicalWeight))
+                .reversed());
+        List<ScoredChunk> kept = new ArrayList<>();
+        for (ScoredChunk hit : ranked) {
+            if (combinedScore(hit, keys, lexicalWeight) < rerankMinScore) {
+                break; // 已按综合分降序，后面只会更低
+            }
+            kept.add(hit);
+            if (kept.size() >= k) {
+                break;
+            }
+        }
+        return kept;
+    }
+
+    /** 综合分 = 向量分 ×(1-w) + 词法特异度 ×w。 */
+    static double combinedScore(ScoredChunk hit, List<String> keys, double lexicalWeight) {
+        if (hit == null) {
+            return 0d;
+        }
+        double w = Math.min(1.0, Math.max(0.0, lexicalWeight));
+        return hit.getScore() * (1 - w) + lexicalScore(keys, hit) * w;
+    }
+
+    /**
+     * 词法特异度 0..1：取命中词里最长的那个，按 4 字封顶归一。
+     *
+     * <p>用「最长命中」而不是「命中数量」，是因为 {@link #queryTerms} 会为长词
+     * 额外产出一批 2-3 字 n-gram，按数量算会被这些碎片稀释 ——
+     * 命中「心肌梗死」显然比命中「心肌」更能说明这块内容对得上。
+     */
+    static double lexicalScore(List<String> keys, ScoredChunk hit) {
+        if (keys == null || keys.isEmpty() || hit == null) {
+            return 0d;
+        }
+        String text = (hit.getTitle() == null ? "" : hit.getTitle()) + "\n"
+                + (hit.getContent() == null ? "" : hit.getContent());
+        int longest = 0;
+        for (String k : keys) {
+            if (k.length() >= 2 && k.length() > longest && text.contains(k)) {
+                longest = k.length();
+            }
+        }
+        return Math.min(1.0, longest / 4.0);
     }
 
     static List<String> queryTerms(String query) {
@@ -136,7 +223,8 @@ public class RagService {
             }
         }
         splitHan(han.toString(), terms);
-        return new ArrayList<>(terms);
+        // 展开医学别名：让「心梗」也能匹配到正文里的「心肌梗死」
+        return MedicalSynonyms.expand(terms);
     }
 
     private static void splitHan(String run, Set<String> terms) {
@@ -168,6 +256,11 @@ public class RagService {
     public List<Citation> visibleCitations(String question, List<Citation> raw) {
         if (raw == null || raw.isEmpty()) {
             return List.of();
+        }
+        // 真实 embedding 下这些引用来自已经过重排阈值的知识块，相关性在检索阶段就判过了；
+        // 再按字面复筛一遍，只会把同义表述的正确出处误杀。
+        if (vectorizeService.semantic()) {
+            return List.copyOf(raw);
         }
         List<String> keys = queryTerms(question);
         List<Citation> kept = new ArrayList<>();

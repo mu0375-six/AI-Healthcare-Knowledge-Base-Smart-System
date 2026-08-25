@@ -1,5 +1,6 @@
 package com.healthkb.service;
 
+import com.healthkb.common.EmergencyRules;
 import com.healthkb.common.MedicalConstants;
 import com.healthkb.dto.TriageDtos;
 import com.healthkb.rag.RagService;
@@ -11,7 +12,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -125,17 +125,9 @@ public class TriageService {
         return resp;
     }
 
+    /** 规则本体已抽到 {@link EmergencyRules}，与问答共用同一份判断。 */
     public boolean isEmergency(String text) {
-        if (text == null) {
-            return false;
-        }
-        String t = text.toLowerCase(Locale.ROOT);
-        if (containsAny(t, "昏迷", "意识不清", "不省人事", "大出血", "喷血", "严重过敏",
-                "喉头水肿", "过敏性休克", "抽搐不止", "中毒", "自杀", "呼之不应")) {
-            return true;
-        }
-        return (t.contains("胸痛") || t.contains("胸口痛") || t.contains("压榨"))
-                && (t.contains("呼吸困难") || t.contains("喘不过气") || t.contains("大汗") || t.contains("濒死"));
+        return EmergencyRules.isEmergency(text);
     }
 
     private String buildSummary(String text, List<TriageDtos.DepartmentHit> ranked, String urgency) {

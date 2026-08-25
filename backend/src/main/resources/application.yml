@@ -91,7 +91,15 @@ app:
     timeout-seconds: 30
   rag:
     top-k: 5
+    # 召回阶段的向量分下限（LangChain4j ContentRetriever）
     min-score: 0.0
+    # 重排阶段，仅在配了真实 embedding 时生效；哈希兜底模式走字面硬过滤，与这两项无关。
+    rerank:
+      # 词法特异度占的权重，其余给向量分
+      lexical-weight: 0.3
+      # 综合分低于该值即判定「知识库对不上」。换 embedding 模型后需重新标定：
+      # GET /api/knowledge/vectors/inspect?q=... 看 combined 一列
+      min-score: 0.55
     context-turns: 6
     cache-ttl-minutes: 10
     context-cache-minutes: 30
