@@ -146,6 +146,8 @@ docker compose -p healthkb up -d milvus
 
 不启动 Milvus 时使用进程内余弦检索，功能一致但重启后需重建。切换 embedding 模型导致向量维度变化时，Milvus collection 会自动重建，随后可在后台「知识库」点重新索引灌回数据。
 
+连接参数可用环境变量覆盖：`APP_MILVUS_HOST`（默认 `localhost`，容器内为 `milvus`）、`APP_MILVUS_PORT`（默认 `19530`）、`APP_MILVUS_COLLECTION`（默认 `healthkb_chunks`）；`APP_MILVUS_ENABLED=false` 可整体跳过 Milvus 直用内存向量库。
+
 两条配套的健壮性设计：
 
 - **补账队列**：故障窗口内只写入内存副本的操作会被记入有界队列，Milvus 恢复可达后自动按序补写（删除以墓碑参与排序，避免已删文档复活）；「向量」页会显示待补写条数。
@@ -231,6 +233,10 @@ mode = rerank   阈值 = 0.55
 | `APP_CORS_ALLOWED_ORIGINS` | 允许的跨域前端源，逗号分隔多值（直连部署时用） | `http://localhost:5173` |
 | `APP_UPLOAD_MAX_BYTES` | 报告上传单文件上限，驱动后端校验与 multipart 配置 | `10MB` |
 | `APP_UPLOAD_MAX_REQUEST_BYTES` | 单次上传请求总上限（比文件上限大 2MB 留出表单开销） | `12MB` |
+| `APP_KB_ALLOW_NETWORK` | 权威知识库是否允许联网抓取（false 时使用仓库内官方快照） | `true` |
+| `APP_NEWS_ENABLED` | 首页健康新闻爬取开关（false 时首页展示已入库内容） | `true` |
+| `APP_NEWS_ALLOW_NETWORK` | false 时强制使用内置科普快照，不访问网络（离线演示） | `true` |
+| `APP_NEWS_IMAGE_DIR` | 新闻配图本地缓存目录 | `./data/news-images` |
 
 ### 权威知识库
 
@@ -264,8 +270,6 @@ mode = rerank   阈值 = 0.55
 `scripts/seed-demo-usage.py` 会以真实接口走一遍演示流程（问答/收藏/导诊/档案/指标/病史/建议/报告/知识库），让 `user / User123!` 登录后各页面即有内容（含首页异常指标与迷你趋势）；管理员账号可在「向量检索」页查看库状态。
 
 > 示例化验单 `samples/real-lab-cmp.jpg` 取自 Wikimedia Commons 文件 [CMP report.JPG](https://commons.wikimedia.org/wiki/File:CMP_report.JPG)（作者 Bobjgalindo，CC BY-SA 4.0），仅用于功能演示与解析器测试；项目不含任何真实患者隐私数据。
-
-问答里的图片是另一条路：直接以 base64 送给多模态模型观察，与报告识别同源。
 
 ### 解读结果导出
 
@@ -303,24 +307,31 @@ SSE 需要关闭代理缓冲，`frontend/nginx.conf` 里已经配好 `proxy_buff
 统一响应：`{ "code": 0, "message": "ok", "data": {} }`，除登录注册外需 `Authorization: Bearer <token>`。
 列表接口返回统一分页结构 `{ "records": [...], "total": n, "page": p, "size": s }`（size 上限 100）。
 
-- `POST /api/auth/register` `POST /api/auth/login` `GET /api/auth/me` `POST /api/auth/password`（改密码并注销当前会话）
-- `POST /api/chat/ask`（`text/event-stream`：`meta` / `delta` / `citation` / `done` / `error`；question ≤500 字）
-- `PUT /api/chat/sessions/{id}`（会话重命名）
-- `GET/POST /api/health/profile|metrics|histories` `POST /api/health/metrics/batch` `GET /api/health/reference` `GET /api/health/alerts` `GET /api/health/trends` `POST /api/health/advice`
-- `GET /api/admin/health/{userId}`（仅当该用户 `sharedToAdmin=true`）
-- `POST /api/reports/upload` `GET /api/reports` `GET /api/reports/{id}` `POST /api/reports/{id}/import`
-- `GET/POST/DELETE /api/admin/knowledge*`
-- `POST /api/triage` `POST /api/triage/nearby` `GET/DELETE /api/triage/location`
-- `GET /api/news` `GET /api/news/{id}` `GET /api/news/{id}/image`
+- **认证**：`POST /api/auth/register`、`POST /api/auth/login`、`GET /api/auth/me`、`POST /api/auth/password`（改密码并注销当前会话）
+- **问答**：`POST /api/chat/ask`（`text/event-stream`：`meta` / `delta` / `citation` / `done` / `error`；question ≤500 字、最多 4 张图片）；`GET|POST /api/chat/sessions`、`GET|PUT|DELETE /api/chat/sessions/{id}`（重命名 / 删除）、`GET /api/chat/sessions/{id}/messages`、`POST /api/chat/images`、`GET /api/chat/images/{id}`
+- **健康档案**：`GET|POST /api/health/profiles`、`PUT|DELETE /api/health/profiles/{id}`、`GET|PUT /api/health/profile`、`GET|POST /api/health/metrics`、`DELETE /api/health/metrics/{id}`、`POST /api/health/metrics/batch`（CSV 批量导入）、`GET /api/health/reference`、`GET /api/health/alerts`、`GET|POST /api/health/histories`、`DELETE /api/health/histories/{id}`、`GET /api/health/trends`、`POST /api/health/advice`
+- **首页总览**：`GET /api/home/overview`（统计 + 异常提醒 + 迷你趋势）
+- **收藏**：`GET|POST /api/favorites`、`DELETE /api/favorites/{id}`
+- **管理端**：`GET /api/admin/health/{userId}`（仅当该用户 `sharedToAdmin=true`）；`GET|POST|DELETE /api/admin/knowledge*`（上传 / 文本录入 / 官方源同步 / 重新索引）
+- **知识检索**：`GET /api/knowledge/search`、`GET /api/knowledge/vectors/status`、`GET /api/knowledge/vectors/inspect?q=...`（召回打分与检索模式诊断）、`GET /api/knowledge/highlights`、`GET /api/knowledge/terms`
+- **报告**：`POST /api/reports/upload`、`GET /api/reports`、`GET /api/reports/{id}`、`POST /api/reports/{id}/import`
+- **导诊**：`POST /api/triage`、`POST /api/triage/nearby`（高德周边检索）、`GET|DELETE /api/triage/location`
+- **健康新闻**：`GET /api/news`、`GET /api/news/{id}`、`GET /api/news/{id}/image`
 
 ## 目录结构
 
 ```
-README.md
-docker-compose.yml
-samples/demo-report.txt
-backend/          Spring Boot 4 + Spring AI + LangChain4j + MyBatis-Plus
-frontend/         Vue 3 + TypeScript + Vite + Element Plus
+README.md                  本文件（入门、配置、部署）
+项目改进纪要.md             改进成果与 5 分钟汇报话术（面向指导老师）
+改进清单.md                 全量改进清单（代码审查 → 四轮执行 → 后备池）
+.env.example               配置模板（复制为 .env 后填入自己的值，.env 不入库）
+docker-compose.yml         基础设施（MySQL/Redis/Milvus）与应用编排
+backend/                   Spring Boot 4 + Spring AI + LangChain4j + MyBatis-Plus
+frontend/                  Vue 3 + TypeScript + Vite + Element Plus
+samples/                   演示素材（真实化验单照片、示例文本报告）
+scripts/                   演示数据播种、冒烟/留痕测试脚本
+deploy/milvus/             Milvus 离线镜像包与 embedEtcd 配置（国内拉不到镜像时用）
+.github/workflows/ci.yml   CI：后端测试 + 前端构建 + 密钥自查
 ```
 
 ## 测试
@@ -331,6 +342,8 @@ mvn -q test
 cd ../frontend
 npx vue-tsc --noEmit
 ```
+
+当前状态：后端 94 个测试全部通过（`Tests run: 94, Failures: 0, Errors: 0`），前端类型检查与构建通过。
 
 ## 已知限制
 
