@@ -57,4 +57,25 @@ public class AuthService {
         }
         return AuthDtos.UserView.from(user);
     }
+
+    /**
+     * 改密码后立即注销当前会话：无状态 JWT 无法吊销旧令牌，但 Sa-Token 的
+     * service 层踢下线能让所有已签发 token 立刻失效，强制重新登录。
+     */
+    public void changePassword(AuthDtos.ChangePasswordRequest req) {
+        Long userId = SecurityUtils.currentUserId();
+        SysUser user = userMapper.selectById(userId);
+        if (user == null) {
+            throw AppException.unauthorized("未登录或登录已过期");
+        }
+        if (!BCrypt.checkpw(req.getOldPassword(), user.getPassword())) {
+            throw AppException.badRequest("原密码不正确");
+        }
+        if (BCrypt.checkpw(req.getNewPassword(), user.getPassword())) {
+            throw AppException.badRequest("新密码不能与原密码相同");
+        }
+        user.setPassword(BCrypt.hashpw(req.getNewPassword(), BCrypt.gensalt()));
+        userMapper.updateById(user);
+        StpUtil.logout(userId);
+    }
 }

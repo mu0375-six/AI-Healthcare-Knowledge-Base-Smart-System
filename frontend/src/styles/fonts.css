@@ -1,0 +1,49 @@
+/* ============================================================
+   字体 —— Editorial Luxury
+   ------------------------------------------------------------
+   展示层：Fraunces Variable（拉丁）。选它而不是 Playfair，是因为
+   Playfair 已经是"衬线大标题"的默认答案；Fraunces 带 opsz 光学尺寸轴，
+   字号越大笔画对比越强 —— 这正是 editorial 排版的关键，也更少见。
+   中文标题走系统衬线（宋体族），零下载就能拿到同一种气质。
+
+   正文层：Geist Variable + 系统中文黑体。
+   数据层：Geist Mono，化验值必须等宽。
+
+   只声明拉丁子集：中文字形一律交给系统字体，不为 CJK 付首屏代价。
+   ============================================================ */
+@font-face {
+  font-family: 'Fraunces Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  /* opsz 轴版本：font-optical-sizing 生效的前提 */
+  src: url('@fontsource-variable/fraunces/files/fraunces-latin-opsz-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Geist Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/geist/files/geist-latin-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Geist Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}

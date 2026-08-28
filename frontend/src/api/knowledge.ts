@@ -1,8 +1,10 @@
 import http from './http'
-import type { ApiEnvelope, KbDocument } from './types'
+import type { ApiEnvelope, KbDocument, PageResult } from './types'
 
-export function listKnowledge() {
-  return http.get<unknown, ApiEnvelope<KbDocument[]>>('/api/admin/knowledge')
+export function listKnowledge(page = 1, size = 20) {
+  return http.get<unknown, ApiEnvelope<PageResult<KbDocument>>>('/api/admin/knowledge', {
+    params: { page, size },
+  })
 }
 
 export function addKnowledgeText(payload: { title: string; category?: string; content: string; source?: string }) {
@@ -87,4 +89,20 @@ export function inspectVectors(q: string) {
 
 export function reindexVectors() {
   return http.post<unknown, ApiEnvelope<{ count: number; store: VectorStoreInfo }>>('/api/admin/knowledge/reindex')
+}
+
+export interface KbHighlight {
+  id: number
+  title: string
+  category?: string
+  publisher?: string
+  sourceUrl?: string
+  excerpt?: string
+}
+
+/** 首页「医学小知识」：知识库里的权威文档摘录，普通用户可读。 */
+export function listHighlights(limit = 6) {
+  return http.get<unknown, ApiEnvelope<KbHighlight[]>>('/api/knowledge/highlights', {
+    params: { limit },
+  })
 }

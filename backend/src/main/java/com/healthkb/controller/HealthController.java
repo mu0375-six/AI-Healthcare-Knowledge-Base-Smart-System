@@ -81,6 +81,24 @@ public class HealthController {
         return ApiResponse.ok(healthService.addMetric(req));
     }
 
+    /** CSV 等批量导入，单次上限 500 条（DTO 校验）。 */
+    @PostMapping("/metrics/batch")
+    public ApiResponse<Integer> addMetrics(@Valid @RequestBody HealthDtos.MetricBatchRequest req) {
+        return ApiResponse.ok(healthService.addMetrics(req));
+    }
+
+    /** 指标参考区间唯一权威源下发；前端不再自持一份阈值。 */
+    @GetMapping("/reference")
+    public ApiResponse<List<Map<String, Object>>> reference() {
+        return ApiResponse.ok(healthService.reference());
+    }
+
+    /** 全档案异常提醒：连续超标 + 待观察两级。 */
+    @GetMapping("/alerts")
+    public ApiResponse<List<HealthDtos.AlertItem>> alerts() {
+        return ApiResponse.ok(healthService.alerts());
+    }
+
     @DeleteMapping("/metrics/{id}")
     public ApiResponse<Void> delMetric(@PathVariable Long id) {
         healthService.deleteMetric(id);

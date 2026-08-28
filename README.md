@@ -8,7 +8,7 @@
 
 | 层 | 组件 |
 | --- | --- |
-| 前端 | Vue 3 + TypeScript + Vite + Element Plus；markdown-it + KaTeX（Markdown/公式渲染、医学术语高亮）；ECharts（健康数据可视化）；SSE 流式对话 |
+| 前端 | Vue 3 + TypeScript + Vite + Element Plus；Apple 风格设计系统（毛玻璃材质分层、弹簧曲线动效、系统字体栈，遵循 prefers-reduced-motion/transparency/contrast）；markdown-it + KaTeX；ECharts；SSE 流式对话 |
 | 后端框架 | Spring Boot 4 + Sa-Token（JWT 模式，`StpLogicJwtForSimple`） |
 | 对话 | Spring AI 2.0 `ChatClient` 流式问答（OpenAI 兼容，默认 DeepSeek，支持图片多模态） |
 | RAG | LangChain4j 流水线编排：`DocumentSplitters` 切分 → `EmbeddingStoreContentRetriever` 检索 → `DefaultRetrievalAugmentor` |
@@ -109,12 +109,16 @@ npm run dev
 
 | 模块 | 说明 |
 | --- | --- |
-| 智能健康问答 | RAG 检索知识库，SSE 流式回答，正文末尾标注出处，医学名词高亮；命中急症关键词时先于模型输出弹出急诊提示 |
+| 智能健康问答 | RAG 检索知识库，SSE 流式回答，正文末尾标注出处，医学名词高亮；命中急症关键词时先于模型输出弹出急诊提示；会话支持重命名 |
 | 健康档案 | 档案/指标/病史，ECharts 曲线 + 连续超标提醒，AI 建议；默认仅本人可见 |
-| 报告解读 | Tika 解析 PDF/Word/txt；解析空腹血糖、血压等指标并逐项解读 |
+| 异常提醒中心 | 健康页顶部汇总全部档案的连续超标（需复查）与偶发异常（待观察），支持成员筛选与本地已处理标记 |
+| 指标 CSV 导入导出 | 浏览器端解析预览、脏行标注后批量写入（单次 ≤500 条）；导出 CSV 可直接回灌；英文指标名自动归一（如 glucose → 空腹血糖） |
+| 报告解读 | Tika 解析 PDF/Word/txt；解析空腹血糖、血压等指标并逐项解读；拍照化验单走多模态转写，解读可导出 PDF |
 | 知识库管理 | 启动时同步 WHO / 国家卫健委公开文本；管理员也可再同步或上传 |
-| 科室导诊 | 规则 + 向量检索，急诊关键词直达急诊科（规则与问答共用 `EmergencyRules`） |
-| 用户系统 | JWT 注册登录、问答历史、收藏；档案隐私权限 |
+| 科室导诊 | 规则 + 向量检索，急诊关键词直达急诊科（规则与问答共用 `EmergencyRules`）；结果页可按位置检索**附近医疗资源** |
+| 附近医疗资源 | 高德地图周边检索真实医院/药店（名称、距离、地址、电话），大模型只对真实列表做贴合症状的解释；位置默认用完即走，勾选才保存、可清除；无 key 或断网时降级为科室就医建议 |
+| 首页健康新闻 | 启动后与每 6 小时爬取世界卫生组织中文新闻室（正文 + 配图本地化）；断网自动落库内置科普快照；卡片点开是站内图文详情页 |
+| 用户系统 | JWT 注册登录、问答历史、收藏、修改密码（改后强制重新登录）；档案隐私权限 |
 
 ## 可选配置
 
@@ -141,6 +145,11 @@ docker compose -p healthkb up -d milvus
 ```
 
 不启动 Milvus 时使用进程内余弦检索，功能一致但重启后需重建。切换 embedding 模型导致向量维度变化时，Milvus collection 会自动重建，随后可在后台「知识库」点重新索引灌回数据。
+
+两条配套的健壮性设计：
+
+- **补账队列**：故障窗口内只写入内存副本的操作会被记入有界队列，Milvus 恢复可达后自动按序补写（删除以墓碑参与排序，避免已删文档复活）；「向量」页会显示待补写条数。
+- **启动跳过重建**：启动时比对数据库 chunk 数与向量库条数，一致则不再重跑 embedding，只把已算好的向量批量回灌内存备份（知识库大后能省下可观的启动时间与 API 费用）。判据是条数而非内容 —— 若更新了正文但条数恰好没变，设 `APP_KB_FORCE_REINDEX=true` 或在后台点一次重新索引即可。
 
 ### 对话大模型（Spring AI，默认 DeepSeek V4-Flash-Vision）
 
@@ -198,17 +207,30 @@ mode = rerank   阈值 = 0.55
 ### 接口限流
 
 问答、报告解读、健康建议三个接口都会直连大模型，是本项目唯一直接产生费用的地方，
-因此按用户维度做了固定窗口限流。默认值可用环境变量覆盖：
+因此按用户维度做了固定窗口限流。登录与注册是仅有的匿名密码入口，另按**客户端 IP** 单独限流防爆破。
+默认值可用环境变量覆盖：
 
 | 动作 | 变量 | 默认 |
 | --- | --- | --- |
 | 问答 `/api/chat/ask` | `APP_RATE_LIMIT_CHAT` | 20 次 / 分钟 |
 | 报告上传 `/api/reports/upload` | `APP_RATE_LIMIT_UPLOAD` | 5 次 / 分钟 |
 | 健康建议 `/api/health/advice` | `APP_RATE_LIMIT_ADVICE` | 10 次 / 分钟 |
+| 登录/注册 `/api/auth/*`（按 IP） | `APP_RATE_LIMIT_AUTH` | 10 次 / 分钟 |
+
+四个动作共用一个固定窗口，窗口秒数可用 `APP_RATE_LIMIT_WINDOW_SECONDS` 统一调整（默认 60）。
 
 超限返回 HTTP 429。计数优先走 Redis（多实例共享），Redis 不可用时退回进程内计数 ——
 此时各实例配额独立、总量会放大到实例数倍，但对「防脚本刷爆」仍然有效。
 设为 `0` 表示该项不限流。
+
+### 其他部署开关
+
+| 变量 | 说明 | 默认 |
+| --- | --- | --- |
+| `APP_SEED_DEMO_ACCOUNTS` | 是否创建演示账号（admin/user），对外部署可关 | `true` |
+| `APP_CORS_ALLOWED_ORIGINS` | 允许的跨域前端源，逗号分隔多值（直连部署时用） | `http://localhost:5173` |
+| `APP_UPLOAD_MAX_BYTES` | 报告上传单文件上限，驱动后端校验与 multipart 配置 | `10MB` |
+| `APP_UPLOAD_MAX_REQUEST_BYTES` | 单次上传请求总上限（比文件上限大 2MB 留出表单开销） | `12MB` |
 
 ### 权威知识库
 
@@ -219,11 +241,35 @@ mode = rerank   阈值 = 0.55
 
 在线拉取成功则入库网页正文并保留原文链接；网络不通时使用仓库内已核对的官方文本快照。旧的演示条目会被替换。关闭联网同步：`set APP_KB_ALLOW_NETWORK=false`。
 
-### 报告图片
+### 高德地图（附近医疗资源，可选）
 
-报告解读走 Tika，只解析 PDF/Word/txt 的文本层，**不对图片做 OCR**。上传图片报告时可同时提交 `extractedText`，或将文件名包含 `demo` 以使用内置示例解析。也可直接上传仓库中的 `samples/demo-report.txt`。
+在 `.env` 里配置 `AMAP_KEY`（[高德开放平台](https://lbs.amap.com/) 个人开发者免费申请）后，科室导诊结果页底部出现「附近医疗资源」：
 
-问答里的图片是另一条路：直接以 base64 送给多模态模型观察，不经过 OCR。
+- 浏览器定位或手填地址（地理编码）→ 周边检索 3 公里内的医院（优先综合/专科，不足时含社区卫生服务中心）与药房（类目 `090601`）
+- 机构名称/距离/地址/电话全部来自高德真实数据；大模型只对这份列表生成贴合症状的建议，禁止编造机构
+- 位置默认用完即走；勾选「保存此地址」才写入 `user_location` 表（一人一条，可清除）
+
+不配置 key 或网络不可用时该区块自动降级为科室就医建议文字，不影响导诊本身。
+
+### 报告图片与拍照识别
+
+报告解读对 PDF/Word/txt 走 Tika 解析文本层；**图片（png/jpg/jpeg）则直接交给多模态模型转写**（`LlmClient.extractReportText`，复用问答同一条多模态通道，不引入额外 OCR 引擎）——拍一张化验单上传即可识别出指标并进入「解析 → 解读 → 写入档案」全链路。没有化验单照片时，用仓库里的 `samples/real-lab-cmp.jpg` 即可体验（真实检验报告照片，含 GLUCOSE/BUN/ALT 等英文指标——解析器内置英文指标名 → 中文标准名映射与 mg/dL → mmol/L 单位换算，见 `MetricGuide.normalize`）。
+
+问答里的图片是另一条路：输入区「🖼 图片问诊 / 📷 拍照」上传化验单、药盒或患处照片，模型直接看图回答。
+
+识别失败或未配置多模态模型（`APP_LLM_BASE_URL` / `APP_LLM_API_KEY`）时降级为明确提示，仍可：① 同时提交 `extractedText` 粘贴文字；② 上传文件名含 `demo` 使用内置示例解析；③ 直接上传仓库中的 `samples/demo-report.txt`。
+
+### 演示数据
+
+`scripts/seed-demo-usage.py` 会以真实接口走一遍演示流程（问答/收藏/导诊/档案/指标/病史/建议/报告/知识库），让 `user / User123!` 登录后各页面即有内容（含首页异常指标与迷你趋势）；管理员账号可在「向量检索」页查看库状态。
+
+> 示例化验单 `samples/real-lab-cmp.jpg` 取自 Wikimedia Commons 文件 [CMP report.JPG](https://commons.wikimedia.org/wiki/File:CMP_report.JPG)（作者 Bobjgalindo，CC BY-SA 4.0），仅用于功能演示与解析器测试；项目不含任何真实患者隐私数据。
+
+问答里的图片是另一条路：直接以 base64 送给多模态模型观察，与报告识别同源。
+
+### 解读结果导出
+
+报告详情页支持 **PDF 导出**：浏览器本地渲染（html2canvas + jsPDF），A4 多页，无需后端参与。界面支持**深色模式**（右上角一键切换，跟随系统偏好）；首页为**健康总览**：异常指标以「需要留心」卡片呈现（带参考范围与「较上次」差值），点击直达档案趋势。
 
 ## 容器化部署
 
@@ -255,14 +301,17 @@ SSE 需要关闭代理缓冲，`frontend/nginx.conf` 里已经配好 `proxy_buff
 ## 主要 API
 
 统一响应：`{ "code": 0, "message": "ok", "data": {} }`，除登录注册外需 `Authorization: Bearer <token>`。
+列表接口返回统一分页结构 `{ "records": [...], "total": n, "page": p, "size": s }`（size 上限 100）。
 
-- `POST /api/auth/register` `POST /api/auth/login` `GET /api/auth/me`
-- `POST /api/chat/ask`（`text/event-stream`：`meta` / `delta` / `citation` / `done` / `error`）
-- `GET/POST /api/health/profile|metrics|histories` `GET /api/health/trends` `POST /api/health/advice`
+- `POST /api/auth/register` `POST /api/auth/login` `GET /api/auth/me` `POST /api/auth/password`（改密码并注销当前会话）
+- `POST /api/chat/ask`（`text/event-stream`：`meta` / `delta` / `citation` / `done` / `error`；question ≤500 字）
+- `PUT /api/chat/sessions/{id}`（会话重命名）
+- `GET/POST /api/health/profile|metrics|histories` `POST /api/health/metrics/batch` `GET /api/health/reference` `GET /api/health/alerts` `GET /api/health/trends` `POST /api/health/advice`
 - `GET /api/admin/health/{userId}`（仅当该用户 `sharedToAdmin=true`）
-- `POST /api/reports/upload` `GET /api/reports` `GET /api/reports/{id}`
+- `POST /api/reports/upload` `GET /api/reports` `GET /api/reports/{id}` `POST /api/reports/{id}/import`
 - `GET/POST/DELETE /api/admin/knowledge*`
-- `POST /api/triage`
+- `POST /api/triage` `POST /api/triage/nearby` `GET/DELETE /api/triage/location`
+- `GET /api/news` `GET /api/news/{id}` `GET /api/news/{id}/image`
 
 ## 目录结构
 
@@ -286,8 +335,12 @@ npx vue-tsc --noEmit
 ## 已知限制
 
 - 未配置 LLM 时为模板化检索回答，不是真实大模型推理。
+- 报告图片识别（拍照化验单）与问答图片一样依赖多模态模型：未配置 `APP_LLM_API_KEY` 时图片报告会给出明确提示并降级到「粘贴文本 / 上传 PDF·Word·txt / demo 示例」；文本类报告不受影响。
+- 图片报告的指标拆行以多模态模型转写为准：**两列式/终端截屏类排版**（如实验室系统绿屏截图）偶有行对齐错位（个别英文名落入单位位），核心指标（血糖、转氨酶等）已验证对齐；解析器内置英文名→中文映射、mg/dL→mmol/L 换算、行号剥离与单位白名单，普通横版打印/拍照报告效果最佳。
 - 未配置 `app.embedding.*` 时向量为哈希嵌入，适合演示语料召回，不适合大规模语义检索；此时检索走 `lexical-filter` 模式，同义表述的召回能力有限。
 - `app.rag.rerank.min-score` 的默认值 0.55 是按 cosine 相关度 0~1 给的起点，不是对某个具体模型标定过的最优值。
+- 启动是否重建向量按「DB chunk 数 = 向量库条数」判定，发现不了改内容不改条数的更新（用 `APP_KB_FORCE_REINDEX=true` 或后台重新索引兜底）。
+- 上传校验基于扩展名白名单 + 文件头签名，文本类以「UTF-8 可解码且无 NUL」为准，UTF-16 编码的 txt 会被拒；图片 MIME 由检出类型推导，不信任客户端声明。
 - 问答的图片识别完全交给多模态模型（flash-vision 直接观察图片），已移除对本机 Tesseract 的依赖；未配置多模态模型时图片问诊不可用。
 - 未启动 Milvus 时退化为内存向量库；接口抽象保证开箱可用。
 - 知识库使用 WHO / 国家卫健委等公开网页或官方快照，不是医院电子病历或付费指南全文库。

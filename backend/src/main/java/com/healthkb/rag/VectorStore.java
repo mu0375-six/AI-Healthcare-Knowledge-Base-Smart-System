@@ -15,6 +15,15 @@ public interface VectorStore {
 
     void clear();
 
+    /**
+     * 批量读回全部向量与元数据（不含相似度分）。持久化实现（Milvus）用它支撑
+     * 「启动时只回灌内存、不重算 embedding」；不支持时抛 UnsupportedOperationException，
+     * 调用方须兜底为全量重建。
+     */
+    default java.util.List<StoredChunk> loadAll() {
+        throw new UnsupportedOperationException("loadAll");
+    }
+
     default void flush() {
     }
 

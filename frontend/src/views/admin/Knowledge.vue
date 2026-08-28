@@ -1,18 +1,18 @@
 <template>
   <div class="page">
-    <PageHeader title="知识库" desc="优先接入世界卫生组织、国家卫生健康委等权威公开文本，也可继续上传或录入。" />
+    <PageHeader icon="book" kicker="Knowledge" title="知识库" desc="优先接入世界卫生组织、国家卫生健康委等权威公开文本，也可继续上传或录入。" />
 
-    <section class="sheet sheet-pad sync">
+    <section class="panel core-pad sync">
       <div>
         <h3>权威源同步</h3>
         <p>从 WHO 实况报道、国家卫健委公开文件拉取；网络不通时使用已核对的官方文本快照。</p>
       </div>
-      <button class="copper-btn" type="button" :disabled="syncing" @click="doSync">
+      <button class="btn btn-primary" type="button" :disabled="syncing" @click="doSync">
         {{ syncing ? '同步中…' : '从权威源同步' }}
       </button>
     </section>
 
-    <section class="sheet sheet-pad block">
+    <section class="panel core-pad block">
       <el-tabs>
         <el-tab-pane label="上传文件">
           <el-form label-width="80px">
@@ -51,7 +51,7 @@
       </el-tabs>
     </section>
 
-    <section class="sheet sheet-pad block">
+    <section class="panel core-pad block">
       <h3>已入库文档</h3>
       <el-table :data="docs" empty-text="暂无文档">
         <el-table-column prop="title" label="标题" min-width="160" />
@@ -70,6 +70,15 @@
           </template>
         </el-table-column>
       </el-table>
+      <el-pagination
+        v-if="total > pageSize"
+        class="pager"
+        layout="prev, pager, next, total"
+        :total="total"
+        :page-size="pageSize"
+        :current-page="page"
+        @current-change="turn"
+      />
     </section>
   </div>
 </template>
@@ -83,6 +92,9 @@ import type { KbDocument } from '@/api/types'
 import PageHeader from '@/components/PageHeader.vue'
 
 const docs = ref<KbDocument[]>([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = 20
 const file = ref<File | null>(null)
 const uploading = ref(false)
 const saving = ref(false)
@@ -92,8 +104,15 @@ const text = reactive({ title: '', category: '疾病指南', source: '后台录�
 
 onMounted(load)
 
-async function load() {
-  docs.value = (await listKnowledge()).data || []
+async function load(p = page.value) {
+  const res = await listKnowledge(p, pageSize)
+  docs.value = res.data?.records || []
+  total.value = res.data?.total || 0
+  page.value = p
+}
+
+function turn(p: number) {
+  load(p)
 }
 
 function onFile(f: UploadFile) {
@@ -156,11 +175,15 @@ async function remove(id: number) {
 }
 .sync p {
   margin: 0;
-  color: var(--ink-3);
+  color: var(--ink-faint);
   font-size: 13px;
 }
 .block {
   margin-top: 14px;
+}
+.pager {
+  margin-top: 10px;
+  justify-content: center;
 }
 
 @media (max-width: 720px) {

@@ -4,6 +4,14 @@ export interface ApiEnvelope<T> {
   data: T
 }
 
+/** 后端统一分页结构（dto/PageResult）。 */
+export interface PageResult<T> {
+  records: T[]
+  total: number
+  page: number
+  size: number
+}
+
 export interface UserInfo {
   id: number
   username: string
@@ -127,6 +135,28 @@ export interface HomeReportBrief {
   hint?: string
 }
 
+/** 首页「需要留心」：各档案最新的异常指标。 */
+export interface MetricAlert {
+  metricId: number
+  profileId?: number
+  profileName: string
+  metricType: string
+  metricValue: number
+  unit?: string
+  flag: 'high' | 'low'
+  refRange?: string
+  recordedAt: string
+  delta?: number | null
+}
+
+/** 首页迷你趋势：某一指标类型的近 8 个点。 */
+export interface MetricSeries {
+  metricType: string
+  unit?: string
+  flag: 'high' | 'low' | 'normal'
+  points: { when: string; value: number }[]
+}
+
 export interface HomeOverview {
   profileCount: number
   metricCount: number
@@ -136,4 +166,6 @@ export interface HomeOverview {
   profiles: HealthProfile[]
   recentSessions: HomeSessionBrief[]
   recentReports: HomeReportBrief[]
+  alerts: MetricAlert[]
+  series: MetricSeries[]
 }

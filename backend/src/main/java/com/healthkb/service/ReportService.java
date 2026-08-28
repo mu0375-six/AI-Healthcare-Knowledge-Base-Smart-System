@@ -38,8 +38,13 @@ public class ReportService {
     @Transactional
     public Map<String, Object> upload(MultipartFile file, String extractedText, Long profileId) {
         String text = documentParser.extractText(file, extractedText);
+        if (text.isBlank() && isImage(file)) {
+            // 图片报告：文本层解析不到（Tika 不做 OCR），交给多模态模型直接转写化验单。
+            // 未配置模型（APP_LLM_API_KEY 为空）时降级为明确提示，而不是含糊的「识别失败」。
+            text = recognizeImage(file);
+        }
         if (text.isBlank()) {
-            throw AppException.badRequest("未能识别报告文字。图片请粘贴提取文本，或上传文件名含 demo 的示例图 / PDF / Word / txt");
+            throw AppException.badRequest("未能识别报告文字。图片报告请确认已配置多模态模型（APP_LLM_API_KEY），或直接上传文本/PDF/Word，或在图片上传时粘贴提取文本");
         }
         Long userId = SecurityUtils.currentUserId();
         ExamReport report = new ExamReport();
@@ -89,6 +94,30 @@ public class ReportService {
         Map<String, Object> out = new HashMap<>(d);
         out.put("imported", n);
         return out;
+    }
+
+    private static boolean isImage(MultipartFile file) {
+        String name = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase(java.util.Locale.ROOT);
+        return name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg");
+    }
+
+    /** 多模态识别化验单图片；识别不了时抛带成因的 400（未配置模型 / 模型无视觉 / 调用失败）。 */
+    private String recognizeImage(MultipartFile file) {
+        String mime = file.getContentType();
+        if (mime == null || mime.isBlank()) {
+            mime = "image/jpeg";
+        }
+        try {
+            String text = llmClient.extractReportText(file.getBytes(), mime);
+            if (text == null || text.isBlank()) {
+                throw AppException.badRequest("图片识别结果为空，请确认图片清晰完整，或粘贴提取文本");
+            }
+            return text;
+        } catch (IllegalStateException e) {
+            throw AppException.badRequest(e.getMessage());
+        } catch (Exception e) {
+            throw AppException.badRequest("图片识别失败，请重试或直接上传文本版报告");
+        }
     }
 
     public List<ExamReport> listMine() {

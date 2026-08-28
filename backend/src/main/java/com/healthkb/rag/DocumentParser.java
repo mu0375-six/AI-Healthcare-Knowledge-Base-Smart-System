@@ -1,11 +1,13 @@
 package com.healthkb.rag;
 
 import com.healthkb.common.AppException;
+import com.healthkb.common.FileMagic;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.util.Locale;
 import java.util.Set;
 
@@ -15,6 +17,8 @@ public class DocumentParser {
 
     public static final Set<String> ALLOWED_EXT = Set.of("pdf", "doc", "docx", "txt", "png", "jpg", "jpeg");
     public static final long MAX_BYTES = 10L * 1024 * 1024;
+    /** Tika parseToString 默认 10 万字符静默截断，超长报告后半部分无声丢失；这里显式放宽并留痕。 */
+    private static final int MAX_TEXT_CHARS = 200_000;
 
     private final Tika tika = new Tika();
 
@@ -36,6 +40,21 @@ public class DocumentParser {
         if (!ALLOWED_EXT.contains(ext)) {
             throw AppException.badRequest("不支持的文件类型，仅允许 pdf/doc/docx/txt/png/jpg/jpeg");
         }
+        requireMagicMatches(ext, file);
+    }
+
+    /** 扩展名可被随手改，签名不会：内容与扩展名不符一律按伪装文件拒绝。 */
+    private static void requireMagicMatches(String ext, MultipartFile file) {
+        byte[] head;
+        try (InputStream in = file.getInputStream()) {
+            head = in.readNBytes(8 * 1024);
+        } catch (Exception e) {
+            throw AppException.badRequest("无法读取上传文件，请重试");
+        }
+        FileMagic type = FileMagic.detect(head);
+        if (!FileMagic.extMatches(ext, type)) {
+            throw AppException.badRequest("文件内容与扩展名不符，请勿修改后缀后上传");
+        }
     }
 
     public String extractText(MultipartFile file, String extractedText) {
@@ -47,13 +66,16 @@ public class DocumentParser {
             return extractedText.trim();
         }
         if (image) {
-            if (filename.toLowerCase(Locale.ROOT).contains("demo")) {
-                return demoImageText(filename);
-            }
+            // 图片无法本地 OCR，文本识别交给多模态模型（ReportService 调 LLM）；
+            // 知识库上传场景图片本身不参与向量化，返回空串即可。
             return "";
         }
         try {
-            String text = tika.parseToString(file.getInputStream());
+            String text = tika.parseToString(file.getInputStream(),
+                    new org.apache.tika.metadata.Metadata(), MAX_TEXT_CHARS);
+            if (text != null && text.length() >= MAX_TEXT_CHARS) {
+                log.warn("文档「{}」超过 {} 字符上限，解析结果已截断", filename, MAX_TEXT_CHARS);
+            }
             return text == null ? "" : text.trim();
         } catch (Exception e) {
             log.warn("文档解析失败: {}", filename);
@@ -61,15 +83,4 @@ public class DocumentParser {
         }
     }
 
-    private String demoImageText(String filename) {
-        return """
-                演示体检报告（由文件名含 demo 触发的内置解析）
-                文件：%s
-                空腹血糖 7.2 mmol/L (3.9-6.1)
-                收缩压 148 mmHg (90-139)
-                舒张压 92 mmHg (60-89)
-                总胆固醇 5.8 mmol/L (0-5.2)
-                甘油三酯 2.1 mmol/L (0-1.7)
-                """.formatted(filename);
-    }
 }

@@ -1,293 +1,490 @@
 <template>
-  <div class="app" :class="{ fill: isChat }">
-    <aside class="rail" :class="{ open: navOpen }">
-      <router-link to="/home" class="brand" @click="navOpen = false">
-        <BrandMark tone="light" />
-        <div>
-          <div class="brand-name">康识问诊</div>
-          <div class="brand-sub">把知识讲成人话</div>
-        </div>
+  <div class="shell-root">
+    <a class="skip-link" href="#main">跳到主要内容</a>
+
+    <!-- 左侧常驻栏：图标 + 文字，一屏就能看见全部去处。
+         内容区因此从"窄栏居中"变成"贴着侧栏铺开"。 -->
+    <aside class="rail" :class="{ open: railOpen }">
+      <router-link to="/home" class="brand" @click="railOpen = false">
+        <BrandMark />
+        <span class="brand-name">康识问诊</span>
       </router-link>
 
-      <nav class="nav">
-        <router-link v-for="item in mainNav" :key="item.to" :to="item.to" class="nav-item" @click="navOpen = false">
-          <span class="ico" v-html="item.icon"></span>
+      <nav class="rail-nav" aria-label="主导航">
+        <router-link
+          v-for="item in PRIMARY"
+          :key="item.to"
+          :to="item.to"
+          class="rail-item"
+          @click="railOpen = false"
+        >
+          <span class="rail-ico" v-html="ICONS[item.icon]"></span>
           <span>{{ item.label }}</span>
         </router-link>
-        <template v-if="user.isAdmin">
-          <p class="nav-label">管理</p>
-          <router-link to="/admin/knowledge" class="nav-item" @click="navOpen = false">
-            <span class="ico" v-html="icons.book"></span>
-            <span>知识库</span>
-          </router-link>
-          <router-link to="/vectors" class="nav-item" @click="navOpen = false">
-            <span class="ico" v-html="icons.dots"></span>
-            <span>向量检索</span>
-          </router-link>
-        </template>
+
+        <p class="rail-label">更多</p>
+        <router-link
+          v-for="item in secondary"
+          :key="item.to"
+          :to="item.to"
+          class="rail-item"
+          @click="railOpen = false"
+        >
+          <span class="rail-ico" v-html="ICONS[item.icon]"></span>
+          <span>{{ item.label }}</span>
+        </router-link>
       </nav>
 
-      <div class="rail-foot">
-        内容仅供科普，不能替代面诊。
+      <!-- 侧栏底部的提示卡：Canva 在这个位置放的也是引导卡片 -->
+      <div class="rail-card">
+        <b>把化验单拍下来</b>
+        <i>指标、高低、逐项解释会自动整理成档案。</i>
+        <router-link class="btn btn-primary btn-sm" to="/reports/upload">去解读</router-link>
       </div>
     </aside>
 
-    <div v-if="navOpen" class="scrim" @click="navOpen = false"></div>
+    <div v-if="railOpen" class="scrim" @click="railOpen = false"></div>
 
-    <section class="stage">
-      <header class="top">
-        <button class="menu-btn" type="button" @click="navOpen = true" aria-label="打开菜单">
-          <span></span><span></span><span></span>
+    <div class="stage">
+      <header class="topbar">
+        <button class="burger" type="button" aria-label="打开菜单" @click="railOpen = true">
+          <span></span><span></span>
         </button>
-        <div class="crumb">
-          <span class="crumb-kicker">{{ String(route.meta.kicker || '康识') }}</span>
-          <strong>{{ String(route.meta.title || '问诊') }}</strong>
-        </div>
-        <div class="who">
-          <span class="role">{{ user.isAdmin ? '管理员' : '成员' }}</span>
-          <span class="nick">{{ user.nickname }}</span>
-          <button class="ghost-btn slim" type="button" @click="onLogout">退出</button>
+        <strong class="crumb">{{ String(route.meta.title || '') }}</strong>
+        <div class="top-end">
+          <button
+            class="icon-btn"
+            type="button"
+            :title="dark ? '切换到浅色' : '切换到深色'"
+            :aria-label="dark ? '切换到浅色' : '切换到深色'"
+            @click="dark = !dark"
+          >
+            <span v-html="dark ? ICONS.sun : ICONS.moon"></span>
+          </button>
+
+          <el-dropdown trigger="click" @command="onCommand">
+            <button class="who" type="button">
+              <span class="avatar">{{ avatarChar }}</span>
+              <span class="who-name">{{ user.nickname }}</span>
+              <span class="caret" v-html="ICONS.chevron"></span>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item disabled>
+                  <span class="menu-role">{{ user.isAdmin ? '管理员' : '成员' }} · {{ user.user?.username }}</span>
+                </el-dropdown-item>
+                <el-dropdown-item divided command="account">账号设置</el-dropdown-item>
+                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </header>
-      <main class="main" :class="{ 'main-fill': isChat }">
-        <router-view />
+
+      <main id="main" class="main" :class="{ 'main-fill': isChat }">
+        <router-view v-slot="{ Component }">
+          <Transition name="page" mode="out-in">
+            <component :is="Component" />
+          </Transition>
+        </router-view>
       </main>
-    </section>
+    </div>
+
+    <AccountDialog v-model="accountVisible" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { currentTheme, toggleTheme } from '@/utils/theme'
+import { ICONS, type IconName } from '@/utils/icons'
 import BrandMark from '@/components/BrandMark.vue'
+import AccountDialog from '@/components/AccountDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
 const user = useUserStore()
-const navOpen = ref(false)
 const isChat = computed(() => route.path === '/chat')
+const accountVisible = ref(false)
+const railOpen = ref(false)
+const avatarChar = computed(() => user.nickname.slice(0, 1).toUpperCase())
+
+/** 顶级目的地收到三个：一件事一个入口，其余降为二级。 */
+const PRIMARY: { to: string; label: string; icon: IconName }[] = [
+  { to: '/home', label: '今天', icon: 'home' },
+  { to: '/chat', label: '问诊', icon: 'chat' },
+  { to: '/health', label: '档案', icon: 'file' },
+]
+
+const SECONDARY: { to: string; label: string; icon: IconName; admin?: boolean }[] = [
+  { to: '/triage', label: '科室导诊', icon: 'compass' },
+  { to: '/favorites', label: '我的收藏', icon: 'star' },
+  { to: '/admin/knowledge', label: '知识库', icon: 'book', admin: true },
+  { to: '/vectors', label: '向量检索', icon: 'dots', admin: true },
+]
+
+const secondary = computed(() => SECONDARY.filter((s) => !s.admin || user.isAdmin))
+
+const dark = ref(currentTheme() === 'dark')
+watch(dark, (v) => {
+  if (currentTheme() === (v ? 'dark' : 'light')) return
+  toggleTheme()
+})
+
+// 路由一变就收起抽屉，否则返回时它还开着
+watch(() => route.path, () => (railOpen.value = false))
 
 onMounted(() => {
   user.fetchMe().catch(() => undefined)
 })
 
-const icons = {
-  home: '<svg viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20H4z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 20v-6h6v6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
-  chat: '<svg viewBox="0 0 24 24"><path d="M5 6h14v9H8l-3 3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
-  file: '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 9h6M9 13h6M9 17h4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
-  report: '<svg viewBox="0 0 24 24"><path d="M7 4h7l4 4v12H7z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M14 4v4h4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
-  compass: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10 14 1.2-3.8L15 9l-1.2 3.8z" fill="currentColor"/></svg>',
-  dots: '<svg viewBox="0 0 24 24"><circle cx="7" cy="8" r="1.6" fill="currentColor"/><circle cx="12" cy="14" r="2.1" fill="currentColor"/><circle cx="17" cy="9" r="1.4" fill="currentColor"/><circle cx="9" cy="18" r="1.2" fill="currentColor"/></svg>',
-  clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v5l3 2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
-  star: '<svg viewBox="0 0 24 24"><path d="m12 5 1.8 4.6L19 11l-3.6 3.1L16.5 19 12 16.6 7.5 19l1.1-4.9L5 11l5.2-1.4z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
-  book: '<svg viewBox="0 0 24 24"><path d="M6 5h11v14H8a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 17h11" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
-}
-
-const mainNav = [
-  { to: '/home', label: '首页', icon: icons.home },
-  { to: '/chat', label: '智能问答', icon: icons.chat },
-  { to: '/health', label: '健康档案', icon: icons.file },
-  { to: '/reports', label: '报告解读', icon: icons.report },
-  { to: '/triage', label: '科室导诊', icon: icons.compass },
-  // 会话历史已并入「智能问答」侧栏：那里能直接续问，比只读的历史页强
-  { to: '/favorites', label: '我的收藏', icon: icons.star },
-]
-
-function onLogout() {
-  user.logout()
-  router.push('/login')
+function onCommand(cmd: string) {
+  if (cmd === 'logout') {
+    user.logout()
+    router.push('/login')
+  } else if (cmd === 'account') {
+    accountVisible.value = true
+  }
 }
 </script>
 
 <style scoped>
-.app {
-  height: 100%;
+.shell-root {
+  min-height: 100dvh;
   display: grid;
-  grid-template-columns: var(--nav) 1fr;
-  background: var(--paper);
+  grid-template-columns: 236px 1fr;
 }
+
+/* ---- 左侧常驻栏 ---- */
 .rail {
-  background: var(--rail);
-  color: #e7dfd0;
-  padding: 22px 16px 18px;
+  position: sticky;
+  top: 0;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  z-index: 30;
+  padding: 18px 14px 16px;
+  background: var(--paper-2);
+  border-right: 1px solid var(--edge);
 }
+
 .brand {
   display: flex;
-  gap: 10px;
   align-items: center;
-  color: inherit;
-  padding: 4px 8px 22px;
+  gap: 10px;
+  padding: 4px 8px 20px;
+  color: var(--ink);
+  transition: transform 0.4s var(--ease);
 }
+
+.brand:active {
+  transform: scale(0.97);
+}
+
 .brand-name {
-  font-family: var(--font-serif);
-  font-size: 18px;
-  letter-spacing: 0.08em;
-}
-.brand-sub {
-  font-size: 11px;
-  color: rgba(231, 223, 208, 0.55);
-  margin-top: 2px;
-}
-.nav {
-  flex: 1;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.nav-label {
-  margin: 16px 10px 6px;
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  color: rgba(231, 223, 208, 0.38);
-}
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: rgba(231, 223, 208, 0.78);
-  padding: 9px 12px;
-  border-radius: var(--r-control);
-  font-size: 14px;
-}
-.nav-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
-}
-.nav-item.router-link-active {
-  background: rgba(196, 93, 58, 0.18);
-  color: #fff;
-}
-.ico {
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-}
-.ico :deep(svg) {
-  width: 18px;
-  height: 18px;
-}
-.rail-foot {
-  font-size: 11px;
-  line-height: 1.6;
-  color: rgba(231, 223, 208, 0.4);
-  padding: 16px 10px 4px;
-}
-.stage {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.top {
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 28px;
-  border-bottom: 1px solid var(--line);
-}
-.crumb-kicker {
-  display: block;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--copper);
-}
-.crumb strong {
-  font-family: var(--font-serif);
-  font-size: 18px;
+  font-family: var(--font-display);
+  font-size: 19px;
   font-weight: 600;
+  letter-spacing: -0.02em;
 }
-.who {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.role {
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  color: var(--moss);
-  border: 1px solid var(--line-strong);
-  padding: 3px 8px;
-  border-radius: 999px;
-}
-.nick {
-  color: var(--ink-2);
-  font-size: 14px;
-}
-.slim {
-  padding: 6px 12px;
-  font-size: 13px;
-}
-.main {
+
+.rail-nav {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 24px 28px 36px;
-}
-.main-fill {
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding-bottom: 16px;
+  gap: 2px;
+  margin: 0 -4px;
+  padding: 0 4px;
 }
+
+.rail-label {
+  margin: 18px 10px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.rail-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 11px;
+  border-radius: var(--r-control);
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.4s var(--ease), color 0.3s var(--ease-soft),
+    transform 0.4s var(--ease);
+}
+
+.rail-item:active {
+  transform: scale(0.985);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rail-item:hover {
+    background: var(--tray);
+    color: var(--ink);
+  }
+}
+
+/* 当前位置：主色实底。左栏里实底比下划线更明确 */
+.rail-item.router-link-active {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 550;
+}
+
+.rail-ico {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.rail-ico :deep(svg) {
+  width: 19px;
+  height: 19px;
+  display: block;
+}
+
+/* 侧栏底部引导卡 */
+.rail-card {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: var(--r-card);
+  background: var(--card);
+  border: 1px solid var(--edge);
+  box-shadow: var(--inner-light);
+}
+
+.rail-card b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.rail-card i {
+  display: block;
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-mute);
+  margin: 4px 0 10px;
+}
+
+/* ---- 主区 ---- */
+.stage {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-nav);
+  height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 28px;
+  background: var(--chrome);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid var(--edge);
+}
+
+.crumb {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-mute);
+}
+
+.top-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: none;
+  color: var(--ink-mute);
+  cursor: pointer;
+  border-radius: 999px;
+  transition: color 0.3s var(--ease-soft), background 0.4s var(--ease),
+    transform 0.4s var(--ease);
+}
+
+.icon-btn:active {
+  transform: scale(0.9);
+}
+
+.icon-btn :deep(svg) {
+  width: 18px;
+  height: 18px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .icon-btn:hover {
+    color: var(--ink);
+    background: var(--tray);
+  }
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 3px 12px 3px 3px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  transition: background 0.4s var(--ease), transform 0.4s var(--ease);
+}
+
+.who:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .who:hover {
+    background: var(--tray);
+  }
+}
+
+.avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+}
+
+.who-name {
+  font-size: 14px;
+  font-weight: 550;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.caret :deep(svg) {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.menu-role {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.main {
+  flex: 1;
+  min-height: 0;
+  padding: 26px 28px 48px;
+}
+
+.main-fill {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: calc(100dvh - 58px);
+  padding-bottom: 20px;
+}
+
 .main-fill > * {
   flex: 1;
   min-height: 0;
 }
-.menu-btn,
+
+.burger,
 .scrim {
   display: none;
 }
-@media (max-width: 860px) {
-  .app {
+
+/* ---- 窄屏：侧栏变抽屉 ---- */
+@media (max-width: 900px) {
+  .shell-root {
     grid-template-columns: 1fr;
   }
+
   .rail {
     position: fixed;
     inset: 0 auto 0 0;
-    width: min(80vw, 280px);
+    width: 254px;
+    z-index: var(--z-modal);
     transform: translateX(-105%);
-    transition: transform 0.2s ease;
+    transition: transform 0.42s var(--ease);
+    box-shadow: var(--shadow-4);
   }
+
   .rail.open {
     transform: none;
   }
+
   .scrim {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(16, 22, 19, 0.4);
-    z-index: 25;
+    z-index: var(--z-grain);
+    background: rgba(34, 30, 26, 0.42);
+    animation: scrim-in 0.3s var(--ease);
   }
-  .menu-btn {
-    display: inline-flex;
-    flex-direction: column;
-    gap: 4px;
-    background: none;
+
+  @keyframes scrim-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .burger {
+    display: grid;
+    gap: 5px;
+    padding: 8px 4px;
     border: 0;
-    padding: 6px;
-    margin-right: 8px;
+    background: none;
+    cursor: pointer;
   }
-  .menu-btn span {
-    width: 16px;
+
+  .burger span {
+    display: block;
+    width: 18px;
     height: 1.5px;
+    border-radius: 2px;
     background: var(--ink);
   }
-  .top {
+
+  .topbar {
     padding: 0 16px;
   }
+
   .main {
-    padding: 16px 16px 28px;
+    padding: 18px 16px 40px;
   }
-  .crumb {
-    flex: 1;
+
+  .who-name,
+  .caret {
+    display: none;
   }
 }
 </style>

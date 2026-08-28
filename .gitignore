@@ -17,3 +17,13 @@ deploy/milvus/*.tar
 # 本地环境变量
 .env
 .env.local
+
+# 本机运行产物与本地代理/工具目录
+node_modules/
+*.log
+shots/
+.smoke-evidence/
+.zcode/
+.agents/
+.claude/
+skills-lock.json

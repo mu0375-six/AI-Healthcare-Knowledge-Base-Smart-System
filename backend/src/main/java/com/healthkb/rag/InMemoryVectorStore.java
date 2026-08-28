@@ -55,6 +55,16 @@ public class InMemoryVectorStore implements VectorStore {
     }
 
     @Override
+    public List<StoredChunk> loadAll() {
+        List<StoredChunk> out = new ArrayList<>(records.size());
+        for (Record r : records.values()) {
+            out.add(new StoredChunk(r.chunkId(), r.documentId(), r.vector.clone(),
+                    r.content(), r.title(), r.category(), r.source()));
+        }
+        return out;
+    }
+
+    @Override
     public VectorStoreInfo info() {
         return new VectorStoreInfo("memory", true, records.size(), vectorizeService.dimension(), "", "进程内余弦检索，重启后重建");
     }

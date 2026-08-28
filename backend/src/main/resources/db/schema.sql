@@ -150,3 +150,32 @@ CREATE TABLE IF NOT EXISTS kb_chunk (
     -- 重建向量库时按文档批量取块
     KEY idx_kb_chunk_document (document_id, ordinal)
 );
+
+-- 首页健康新闻：启动/定时从权威源爬取。source_url 去重在代码里做
+-- （行数最多几十条，且 VARCHAR 前缀唯一索引在 H2 上不可用）。
+CREATE TABLE IF NOT EXISTS news_item (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(512) NOT NULL,
+    summary VARCHAR(1024),
+    content MEDIUMTEXT,
+    image_name VARCHAR(128),
+    builtin_image VARCHAR(64),
+    source_name VARCHAR(128),
+    source_url VARCHAR(768),
+    category VARCHAR(32),
+    published_on DATE,
+    crawled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_news_published (published_on, id)
+);
+
+-- 导诊「附近医疗资源」：用户主动勾选才保存的位置（一人一条，重复保存即覆盖）。
+-- 坐标只在用户明示保存时落库；默认「用完即走」不落库。
+CREATE TABLE IF NOT EXISTS user_location (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    address_text VARCHAR(255),
+    longitude DOUBLE,
+    latitude DOUBLE,
+    saved_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_user_location_user UNIQUE (user_id)
+);

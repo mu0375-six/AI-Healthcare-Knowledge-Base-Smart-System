@@ -45,6 +45,9 @@ public class CacheService {
         }
     }
 
+    /** 全表清扫节流：内存键达到规模后每秒最多扫一次，而不是每次 get 都 O(n)。 */
+    private volatile long lastSweepAt;
+
     public String get(String key) {
         evictExpired();
         StringRedisTemplate current = redis;
@@ -94,8 +97,16 @@ public class CacheService {
     }
 
     private void evictExpired() {
-        Instant now = Instant.now();
-        memory.entrySet().removeIf(e -> e.getValue().expireAt.isBefore(now));
+        if (memory.size() < 64) {
+            return; // 小表扫得起，不值得引入节流状态
+        }
+        long now = System.currentTimeMillis();
+        if (now - lastSweepAt < 1_000) {
+            return;
+        }
+        lastSweepAt = now;
+        Instant current = Instant.now();
+        memory.entrySet().removeIf(e -> e.getValue().expireAt.isBefore(current));
     }
 
     private record Entry(String value, Instant expireAt) {

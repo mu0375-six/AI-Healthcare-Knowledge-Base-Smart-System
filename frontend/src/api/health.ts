@@ -17,20 +17,41 @@ export function deleteProfile(id: number) {
   return http.delete<unknown, ApiEnvelope<void>>(`/api/health/profiles/${id}`)
 }
 
-export function getProfile() {
-  return http.get<unknown, ApiEnvelope<HealthProfile>>('/api/health/profile')
-}
-
-export function updateProfile(payload: Partial<HealthProfile>) {
-  return http.put<unknown, ApiEnvelope<HealthProfile>>('/api/health/profile', payload)
-}
-
 export function listMetrics(profileId?: number) {
   return http.get<unknown, ApiEnvelope<HealthMetric[]>>('/api/health/metrics', { params: { profileId } })
 }
 
 export function addMetric(payload: Partial<HealthMetric> & { profileId?: number }) {
   return http.post<unknown, ApiEnvelope<HealthMetric>>('/api/health/metrics', payload)
+}
+
+/** CSV 等场景的批量写入，单次上限 500 条；返回成功条数。 */
+export function addMetricsBatch(
+  profileId: number,
+  items: Array<{ metricType: string; value: number; unit?: string; recordedAt?: string; note?: string }>,
+) {
+  return http.post<unknown, ApiEnvelope<number>>('/api/health/metrics/batch', { profileId, items })
+}
+
+
+export interface MetricAlertItem {
+  metricId: number
+  profileId: number | null
+  profileName: string
+  metricType: string
+  latestValue: number
+  unit: string
+  flag: 'high' | 'low'
+  consecutiveAbnormal: number
+  samples: number
+  refRange: string
+  recordedAt: string
+  severity: 'warning' | 'watch'
+}
+
+/** 全档案异常提醒：连续超标（warning）+ 待观察（watch）两级。 */
+export function listAlerts() {
+  return http.get<unknown, ApiEnvelope<MetricAlertItem[]>>('/api/health/alerts')
 }
 
 export function deleteMetric(id: number) {

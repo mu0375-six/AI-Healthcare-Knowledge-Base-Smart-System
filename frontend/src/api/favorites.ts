@@ -1,5 +1,5 @@
 import http from './http'
-import type { ApiEnvelope } from './types'
+import type { ApiEnvelope, PageResult } from './types'
 
 export interface FavoriteItem {
   id: number
@@ -17,6 +17,8 @@ export function deleteFavorite(id: number) {
   return http.delete<unknown, ApiEnvelope<void>>(`/api/favorites/${id}`)
 }
 
-export function listFavorites() {
-  return http.get<unknown, ApiEnvelope<FavoriteItem[]>>('/api/favorites')
+export function listFavorites(page = 1, size = 20) {
+  return http.get<unknown, ApiEnvelope<PageResult<FavoriteItem>>>('/api/favorites', {
+    params: { page, size },
+  })
 }

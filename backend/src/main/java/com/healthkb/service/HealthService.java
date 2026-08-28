@@ -153,6 +153,117 @@ public class HealthService {
         metricMapper.deleteById(id);
     }
 
+    /**
+     * 批量写入指标：CSV 导入等一次几百条的场景，逐条调单条接口来回太多。
+     * 指标名统一过 {@link MetricGuide#normalize}，英文表头（glucose/HBA1C…）
+     * 也能落回中文标准类型；单位缺省时补参考区间的默认单位。
+     */
+    public int addMetrics(HealthDtos.MetricBatchRequest req) {
+        HealthProfile p = resolveProfile(req.getProfileId());
+        Long userId = SecurityUtils.currentUserId();
+        int n = 0;
+        for (HealthDtos.MetricRequest item : req.getItems()) {
+            if (item.getValue() == null) {
+                continue;
+            }
+            String type = MetricGuide.normalize(item.getMetricType());
+            if (type.isEmpty()) {
+                continue;
+            }
+            HealthMetric m = new HealthMetric();
+            m.setUserId(userId);
+            m.setProfileId(p.getId());
+            m.setMetricType(type);
+            m.setMetricValue(item.getValue());
+            m.setUnit(item.getUnit() == null || item.getUnit().isBlank()
+                    ? MetricGuide.unitOf(type) : item.getUnit().trim());
+            m.setRecordedAt(item.getRecordedAt() == null ? LocalDateTime.now() : item.getRecordedAt());
+            m.setNote(item.getNote());
+            metricMapper.insert(m);
+            n++;
+        }
+        return n;
+    }
+
+    /** 参考区间下发：阈值的唯一权威源是 MetricGuide，前端不维护第二份。 */
+    public List<Map<String, Object>> reference() {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map.Entry<String, MetricGuide.Band> e : MetricGuide.bands().entrySet()) {
+            out.add(Map.of(
+                    "type", e.getKey(),
+                    "low", e.getValue().low(),
+                    "high", e.getValue().high(),
+                    "unit", e.getValue().unit()));
+        }
+        return out;
+    }
+
+    /**
+     * 异常提醒中心：与 /api/health/trends 同源（{@link MetricTrendAnalyzer}），
+     * 但跨<b>全部</b>档案。连续超标达阈值的是 warning；不足阈值但最新一次
+     * 已超范围的是 watch。首页「需要留心」只看最新一条且有数量上限，
+     * 这里给出完整清单供提醒面板使用。
+     */
+    public List<HealthDtos.AlertItem> alerts() {
+        Long userId = SecurityUtils.currentUserId();
+        DateTimeFormatter when = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        List<HealthProfile> profiles = profileMapper.selectList(new LambdaQueryWrapper<HealthProfile>()
+                .eq(HealthProfile::getUserId, userId)
+                .orderByAsc(HealthProfile::getId));
+        List<HealthDtos.AlertItem> out = new ArrayList<>();
+        for (HealthProfile p : profiles) {
+            List<HealthMetric> metrics = metricMapper.selectList(new LambdaQueryWrapper<HealthMetric>()
+                    .eq(HealthMetric::getUserId, userId)
+                    .eq(HealthMetric::getProfileId, p.getId())
+                    .orderByAsc(HealthMetric::getRecordedAt));
+            if (metrics.isEmpty()) {
+                continue;
+            }
+            Map<String, List<HealthMetric>> byType = metrics.stream()
+                    .collect(Collectors.groupingBy(HealthMetric::getMetricType,
+                            LinkedHashMap::new, Collectors.toList()));
+            for (MetricTrendAnalyzer.Trend t : MetricTrendAnalyzer.analyze(metrics)) {
+                boolean warning = t.alert();
+                if (!warning && t.consecutiveAbnormal() == 0) {
+                    continue;
+                }
+                List<HealthMetric> rows = byType.get(t.metricType());
+                HealthMetric latest = rows.get(rows.size() - 1);
+                HealthDtos.AlertItem a = new HealthDtos.AlertItem();
+                a.setMetricId(latest.getId());
+                a.setProfileId(p.getId());
+                a.setProfileName(p.getDisplayName() == null || p.getDisplayName().isBlank()
+                        ? p.getRelation() : p.getDisplayName());
+                a.setMetricType(t.metricType());
+                a.setLatestValue(t.latest());
+                a.setUnit(latest.getUnit() == null ? t.unit() : latest.getUnit());
+                a.setFlag(t.latestFlag());
+                a.setConsecutiveAbnormal(t.consecutiveAbnormal());
+                a.setSamples(t.samples());
+                a.setRefRange(rangeText(MetricGuide.band(t.metricType())));
+                a.setRecordedAt(latest.getRecordedAt() == null ? "" : latest.getRecordedAt().format(when));
+                a.setSeverity(warning ? "warning" : "watch");
+                out.add(a);
+            }
+        }
+        out.sort(Comparator
+                .comparing((HealthDtos.AlertItem a) -> "warning".equals(a.getSeverity()) ? 0 : 1)
+                .thenComparing(a -> a.getProfileName())
+                .thenComparing(Comparator.comparing((HealthDtos.AlertItem a) -> a.getRecordedAt()).reversed()));
+        return out;
+    }
+
+    private static String rangeText(MetricGuide.Band b) {
+        if (b == null) {
+            return "";
+        }
+        return trimNum(b.low()) + "-" + trimNum(b.high()) + " " + b.unit();
+    }
+
+    private static String trimNum(double d) {
+        return d == Math.floor(d) ? String.valueOf((long) d) : String.valueOf(d);
+    }
+
     public List<HealthHistory> listHistories(Long profileId) {
         HealthProfile p = resolveProfile(profileId);
         return historyMapper.selectList(new LambdaQueryWrapper<HealthHistory>()
@@ -239,9 +350,18 @@ public class HealthService {
         Set<String> allow = Set.of("空腹血糖", "餐后血糖", "收缩压", "舒张压", "体重", "糖化血红蛋白");
         LocalDateTime at = when == null ? LocalDateTime.now() : when;
         String note = "来自报告「" + (reportName == null ? "体检" : reportName) + "」";
+        // 幂等比对要用的存量指标一次预载，避免循环内逐条 selectOne（N+1 往返）
+        Map<String, HealthMetric> existing = new LinkedHashMap<>();
+        for (HealthMetric m : metricMapper.selectList(new LambdaQueryWrapper<HealthMetric>()
+                .eq(HealthMetric::getProfileId, profile.getId())
+                .eq(HealthMetric::getRecordedAt, at)
+                .eq(HealthMetric::getNote, note))) {
+            existing.put(m.getMetricType(), m);
+        }
         int n = 0;
         for (ExamReportItem item : items) {
-            if (item.getName() == null || !allow.contains(item.getName().trim())) {
+            String name = MetricGuide.normalize(item.getName());
+            if (name.isEmpty() || !allow.contains(name)) {
                 continue;
             }
             Double v = parseDouble(item.getItemValue());
@@ -251,11 +371,11 @@ public class HealthService {
             HealthMetric m = new HealthMetric();
             m.setUserId(SecurityUtils.currentUserId());
             m.setProfileId(profile.getId());
-            m.setMetricType(item.getName().trim());
+            m.setMetricType(name);
             m.setMetricValue(v);
             String unit = item.getUnit();
             if (unit == null || unit.isBlank()) {
-                unit = MetricGuide.unitOf(item.getName());
+                unit = MetricGuide.unitOf(name);
             }
             m.setUnit(unit);
             m.setRecordedAt(at);
@@ -263,18 +383,14 @@ public class HealthService {
 
             // 幂等：上传时选了档案会自动导入一次，报告详情页的「写入档案」按钮会再调一次。
             // 同一份报告的同一指标只应留一条，否则档案里会出现重复记录、且「较上次」恒为 0。
-            HealthMetric exists = metricMapper.selectOne(new LambdaQueryWrapper<HealthMetric>()
-                    .eq(HealthMetric::getProfileId, profile.getId())
-                    .eq(HealthMetric::getMetricType, m.getMetricType())
-                    .eq(HealthMetric::getRecordedAt, at)
-                    .eq(HealthMetric::getNote, note)
-                    .last("LIMIT 1"));
+            HealthMetric exists = existing.get(m.getMetricType());
             if (exists != null) {
                 exists.setMetricValue(v);
                 exists.setUnit(unit);
                 metricMapper.updateById(exists);
             } else {
                 metricMapper.insert(m);
+                existing.put(m.getMetricType(), m);
             }
             n++;
         }

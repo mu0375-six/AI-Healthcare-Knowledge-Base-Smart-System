@@ -1,124 +1,77 @@
 <template>
   <div class="chat">
-    <aside class="sessions">
-      <button class="ink-btn full" type="button" @click="newSession">新对话</button>
-      <div class="sess-list">
-        <div v-if="!sessions.length" class="quiet">还没有会话</div>
-        <button
-          v-for="s in sessions"
-          :key="s.id"
-          class="sess"
-          :class="{ active: s.id === sessionId }"
-          type="button"
-          @click="openSession(s.id)"
-        >
-          <span class="sess-main">
-            <b>{{ s.title || '未命名会话' }}</b>
-            <time>{{ formatWhen(s.updatedAt) }}</time>
-          </span>
-          <em @click.stop="removeSession(s.id)">删除</em>
-        </button>
-      </div>
-    </aside>
+    <SessionList
+      :sessions="sessions"
+      :active-id="sessionId"
+      :has-more="hasMoreSessions"
+      @new="newSession"
+      @open="openSession"
+      @remove="removeSession"
+      @rename="renameSessionById"
+      @more="loadMoreSessions"
+    />
 
     <section class="board">
       <div v-if="profileHint" class="profile-bar">
-        正在结合「{{ profileHint }}」的档案提问
+        <span v-html="ICONS.file"></span>
+        <span>正在结合「<b>{{ profileHint }}</b>」的档案提问</span>
         <button type="button" @click="clearProfile">不用档案</button>
       </div>
-      <div ref="scroller" class="messages">
-        <div v-if="!messages.length" class="blank">
-          <h3>把症状、药品或检查，说具体一点。</h3>
-          <p>回答会尽量口语，用药与疾病会写得更专业，并标出知识库出处。也可以直接发检查单、药盒或患处照片。</p>
-          <div class="chips">
-            <button v-for="s in suggests" :key="s" type="button" @click="question = s; send()">{{ s }}</button>
-          </div>
-        </div>
-        <article v-for="m in messages" :key="m.id" class="bubble" :class="m.role">
-          <div class="who">{{ m.role === 'user' ? '我' : '康识助手' }}</div>
-          <div v-if="m.role === 'user'" class="pics">
-            <ChatPhoto v-for="(p, i) in m.localPreviews || []" :key="'p' + i" :src="p" alt="发送的图片" />
-            <ChatPhoto v-for="a in attachmentsOf(m)" :key="a.id" :id="a.id" :alt="a.filename" />
-          </div>
-          <div v-if="m.role === 'user'" class="plain">{{ m.content }}</div>
-          <div v-else class="markdown-body" v-html="renderMarkdown(m.content, terms)"></div>
-          <button
-            v-if="m.role === 'assistant' && m.id > 0 && !streaming"
-            class="ghost-btn slim"
-            type="button"
-            @click="fav(m.id)"
-          >
-            收藏该回答
-          </button>
-        </article>
-      </div>
-      <div class="composer" @paste="onPaste" @dragover.prevent @drop.prevent="onDrop">
-        <div v-if="pending.length" class="pending">
-          <div v-for="(p, i) in pending" :key="p.key" class="thumb">
-            <img :src="p.preview" alt="" />
-            <button type="button" @click="removePending(i)">×</button>
-          </div>
-        </div>
-        <el-input
-          v-model="question"
-          type="textarea"
-          :rows="3"
-          resize="none"
-          placeholder="描述症状、药品或想了解的疾病知识，也可粘贴 / 拖入图片。Enter 发送，Shift+Enter 换行"
-          @keydown="onKey"
-        />
-        <div class="bar">
-          <div class="tools">
-            <label class="ghost-btn slim attach">
-              图片
-              <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple hidden @change="onPick" />
-            </label>
-            <span>仅供科普，不能替代面诊</span>
-          </div>
-          <button class="copper-btn" type="button" :disabled="streaming || (!question.trim() && !pending.length)" @click="send">
-            {{ streaming ? '回答中…' : '发送' }}
-          </button>
-        </div>
-      </div>
+      <MessageList
+        ref="messageList"
+        :messages="messages"
+        :streaming="streaming"
+        :terms="terms"
+        :has-earlier="hasEarlierMessages"
+        :suggests="suggests"
+        @fav="fav"
+        @earlier="loadEarlierMessages"
+        @suggest="ask"
+      />
+      <Composer ref="composer" :streaming="streaming" @send="onSend" @stop="stop" />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { createSession, deleteSession, listMessages, listSessions, uploadChatImage } from '@/api/chat'
+import { createSession, deleteSession, listMessages, listSessions, renameSession } from '@/api/chat'
 import { listProfiles } from '@/api/health'
-import { askStream } from '@/api/sse'
 import { addFavorite } from '@/api/favorites'
-import { listTerms } from '@/api/knowledge'
-import type { ChatAttachment, ChatMessage, ChatSession } from '@/api/types'
-import { parseAttachments, renderMarkdown } from '@/utils/markdown'
-import { formatWhen } from '@/utils/format'
-import ChatPhoto from '@/components/ChatPhoto.vue'
+import { useTerms } from '@/composables/useTerms'
+import { useChatStream } from '@/composables/useChatStream'
+import type { ChatMessage, ChatSession } from '@/api/types'
+import SessionList from '@/components/chat/SessionList.vue'
+import MessageList from '@/components/chat/MessageList.vue'
+import Composer from '@/components/chat/Composer.vue'
+import { ICONS } from '@/utils/icons'
 
 const route = useRoute()
 const router = useRouter()
 const sessions = ref<ChatSession[]>([])
 const sessionId = ref<number | null>(null)
 const messages = ref<ChatMessage[]>([])
-const question = ref('')
-const streaming = ref(false)
-const terms = ref<string[]>([])
-const scroller = ref<HTMLElement>()
-const pending = ref<{ key: number; file: File; preview: string }[]>([])
 const profileId = ref<number | null>(null)
 const profileHint = ref('')
-const suggests = ['嗓子痛三天了怎么办', '二甲双胍有哪些注意事项', '空腹血糖 6.8 算高吗']
+import { SUGGESTIONS } from '@/utils/suggestions'
+const suggests = SUGGESTIONS.chat
+const composer = ref<InstanceType<typeof Composer>>()
+const messageList = ref<InstanceType<typeof MessageList>>()
+
+// 会话分页：侧栏只装最近一页，攒多了按「加载更多」往后翻
+let sessionPage = 1
+const hasMoreSessions = ref(false)
+// 消息分页：第 1 页是最新一页，「加载更早」往前翻
+let messagePage = 1
+const hasEarlierMessages = ref(false)
+
+const { terms, loadTerms } = useTerms()
+const { streaming, send, stop } = useChatStream(messages, ensureSession, reloadSessions)
 
 onMounted(async () => {
-  await reloadSessions()
-  try {
-    terms.value = (await listTerms()).data || []
-  } catch {
-    terms.value = ['高血压', '糖尿病', '二甲双胍', '阿司匹林', '氨氯地平']
-  }
+  await Promise.all([reloadSessions(), loadTerms()])
   const pid = Number(route.query.profileId)
   if (pid) {
     profileId.value = pid
@@ -133,38 +86,69 @@ onMounted(async () => {
   if (sid) await openSession(sid)
   const preset = typeof route.query.q === 'string' ? route.query.q.trim() : ''
   if (preset) {
-    question.value = preset
     const q: Record<string, string> = {}
     if (sid) q.sid = String(sid)
     if (pid) q.profileId = String(pid)
     router.replace({ path: '/chat', query: q })
-    await send()
+    ask(preset)
+  }
+  // 首页「发照片问医生」入口：给一个明确的引导，浏览器不允许无手势自动拉起文件选择器
+  if (route.query.photo === '1') {
+    router.replace({ path: '/chat', query: route.query.q ? { q: String(route.query.q) } : {} })
+    ElMessage.info('点输入框下方的「图片」或「拍照」上传化验单、药盒或患处照片，再描述想了解什么')
   }
 })
 
-function clearProfile() {
-  profileId.value = null
-  profileHint.value = ''
-  const q = { ...route.query }
-  delete q.profileId
-  router.replace({ path: '/chat', query: q })
+async function reloadSessions() {
+  const res = await listSessions(1)
+  sessions.value = res.data?.records || []
+  hasMoreSessions.value = sessions.value.length < (res.data?.total || 0)
+  sessionPage = 1
 }
 
-async function reloadSessions() {
-  sessions.value = (await listSessions()).data || []
+async function loadMoreSessions() {
+  const res = await listSessions(sessionPage + 1)
+  const records = res.data?.records || []
+  sessions.value.push(...records)
+  sessionPage += 1
+  hasMoreSessions.value = sessions.value.length < (res.data?.total || 0)
+}
+
+/** 无会话时由流式状态机回调创建；返回会话 id。 */
+async function ensureSession(firstTitle: string) {
+  if (sessionId.value) return sessionId.value
+  const created = await createSession(firstTitle)
+  sessions.value.unshift(created.data)
+  sessionId.value = created.data.id
+  messages.value = []
+  return created.data.id
 }
 
 async function newSession() {
-  const res = await createSession()
-  sessions.value.unshift(res.data)
-  sessionId.value = res.data.id
+  const created = await createSession()
+  sessions.value.unshift(created.data)
+  sessionId.value = created.data.id
   messages.value = []
+  hasEarlierMessages.value = false
 }
 
 async function openSession(id: number) {
   sessionId.value = id
-  messages.value = (await listMessages(id)).data || []
-  await scrollBottom()
+  messagePage = 1
+  const res = await listMessages(id, 1)
+  messages.value = res.data?.records || []
+  hasEarlierMessages.value = messages.value.length < (res.data?.total || 0)
+  await messageList.value?.scrollToBottom()
+}
+
+async function loadEarlierMessages() {
+  if (!sessionId.value) return
+  const res = await listMessages(sessionId.value, messagePage + 1)
+  const records = res.data?.records || []
+  // 后端按页返回时间正序块，向前拼接
+  messages.value = [...records, ...messages.value]
+  messagePage += 1
+  hasEarlierMessages.value = messages.value.length < (res.data?.total || 0)
 }
 
 async function removeSession(id: number) {
@@ -176,355 +160,99 @@ async function removeSession(id: number) {
   await reloadSessions()
 }
 
-function attachmentsOf(m: ChatMessage): ChatAttachment[] {
-  if (m.localPreviews && m.localPreviews.length) return []
-  return parseAttachments(m.attachmentsJson)
+async function renameSessionById(id: number, title: string) {
+  await renameSession(id, title)
+  await reloadSessions()
 }
 
-function addFiles(files: File[]) {
-  for (const file of files) {
-    if (!file.type.startsWith('image/')) continue
-    if (pending.value.length >= 4) {
-      ElMessage.warning('一次最多 4 张图片')
-      break
-    }
-    pending.value.push({ key: Date.now() + Math.random(), file, preview: URL.createObjectURL(file) })
-  }
+function onSend(text: string, files: File[]) {
+  send(text, files, profileId.value)
 }
 
-function onPick(e: Event) {
-  const input = e.target as HTMLInputElement
-  addFiles(Array.from(input.files || []))
-  input.value = ''
+function ask(q: string) {
+  composer.value?.prefill(q)
 }
 
-function onPaste(e: ClipboardEvent) {
-  const files = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'))
-  if (files.length) {
-    e.preventDefault()
-    addFiles(files)
-  }
-}
-
-function onDrop(e: DragEvent) {
-  addFiles(Array.from(e.dataTransfer?.files || []))
-}
-
-function removePending(i: number) {
-  URL.revokeObjectURL(pending.value[i].preview)
-  pending.value.splice(i, 1)
-}
-
-function onKey(e: KeyboardEvent) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    send()
-  }
-}
-
-async function send() {
-  const q = question.value.trim()
-  const files = pending.value.map((p) => p.file)
-  const previews = pending.value.map((p) => p.preview)
-  if ((!q && !files.length) || streaming.value) return
-  const display = q || '请看我发的图片，结合健康知识帮我解读。'
-  question.value = ''
-  pending.value = []
-  if (!sessionId.value) {
-    const created = await createSession(files.length ? '图片问诊' : display.slice(0, 24))
-    sessions.value.unshift(created.data)
-    sessionId.value = created.data.id
-  }
-  messages.value.push({
-    id: -Date.now(),
-    sessionId: sessionId.value!,
-    userId: 0,
-    role: 'user',
-    content: display,
-    localPreviews: previews,
-    createdAt: '',
-  })
-  const bot: ChatMessage = {
-    id: -Date.now() - 1,
-    sessionId: sessionId.value!,
-    userId: 0,
-    role: 'assistant',
-    content: '',
-    createdAt: '',
-  }
-  messages.value.push(bot)
-  const botMsg = messages.value[messages.value.length - 1]
-  streaming.value = true
-  await scrollBottom()
-  try {
-    const imageIds: number[] = []
-    for (const file of files) {
-      const up = await uploadChatImage(file)
-      imageIds.push(up.data.id)
-    }
-    await askStream(
-      { sessionId: sessionId.value, question: display, imageIds, profileId: profileId.value },
-      {
-        onMeta: (meta) => {
-          sessionId.value = meta.sessionId
-          botMsg.id = meta.messageId
-        },
-        onDelta: (chunk) => {
-          botMsg.content += chunk
-          scrollBottom()
-        },
-        onDone: (done) => {
-          botMsg.id = done.messageId
-          botMsg.content = done.fullContent
-        },
-        onError: (msg) => ElMessage.error(msg),
-      },
-    )
-    await reloadSessions()
-  } catch {
-    botMsg.content = botMsg.content || '回答中断，请重试。'
-  } finally {
-    streaming.value = false
-    await scrollBottom()
-  }
+function clearProfile() {
+  profileId.value = null
+  profileHint.value = ''
+  const q = { ...route.query }
+  delete q.profileId
+  router.replace({ path: '/chat', query: q })
 }
 
 async function fav(messageId: number) {
   await addFavorite(messageId)
   ElMessage.success('已收藏')
 }
-
-async function scrollBottom() {
-  await nextTick()
-  if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
-}
 </script>
 
 <style scoped>
 .chat {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 248px 1fr;
   gap: 16px;
   height: 100%;
   min-height: 0;
 }
-.sessions,
+
+/* 消息区不加背景面：让对话直接落在页面底色上，
+   气泡自己是浮起的构件。少一层嵌套，信息密度更高。 */
 .board {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--r-panel);
-  min-height: 0;
-  overflow: hidden;
-}
-.sessions {
   display: flex;
   flex-direction: column;
-  padding: 14px;
-}
-.full {
-  width: 100%;
-  margin-bottom: 12px;
-}
-.sess-list {
-  flex: 1;
+  gap: 12px;
   min-height: 0;
-  overflow-y: auto;
-}
-.quiet {
-  color: var(--ink-3);
-  font-size: 13px;
-  padding: 16px 6px;
-}
-.sess-main {
-  min-width: 0;
-}
-.sess-main b {
-  display: block;
-  font-weight: 500;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.sess-main time {
-  display: block;
-  margin-top: 2px;
-  font-size: 11px;
-  opacity: 0.6;
-}
-.sess {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  text-align: left;
-  background: none;
-  border: 0;
-  border-radius: var(--r-control);
-  padding: 10px 8px;
-  cursor: pointer;
-  color: var(--ink-2);
-}
-.sess span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-}
-.sess em {
-  font-style: normal;
-  font-size: 12px;
-  color: var(--ink-3);
-  flex-shrink: 0;
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-.sess:hover em,
-.sess.active em {
-  opacity: 1;
-}
-.sess.active,
-.sess:hover {
-  background: rgba(196, 93, 58, 0.08);
-}
+
 .profile-bar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin: 0 12px 8px;
-  padding: 8px 12px;
-  border-radius: var(--r-control);
-  background: rgba(44, 86, 72, 0.08);
-  color: var(--moss);
+  gap: 9px;
+  padding: 9px 14px;
+  border-radius: var(--r-card);
+  background: var(--accent-wash);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
   font-size: 13px;
+  flex-shrink: 0;
 }
+
+.profile-bar :deep(svg) {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.profile-bar b {
+  font-weight: 600;
+}
+
 .profile-bar button {
+  margin-left: auto;
   border: 0;
   background: none;
-  color: var(--ink-3);
+  color: var(--ink-faint);
   cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: var(--r-chip);
+  transition: color 0.15s ease;
 }
-.board {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 8px 12px;
-}
-.messages {
-  flex: 1;
-  overflow: auto;
-  padding: 12px 18px;
-}
-.blank {
-  max-width: 520px;
-  padding: 28px 8px;
-}
-.blank h3 {
-  margin: 0 0 8px;
-  font-size: 26px;
-}
-.blank p {
-  color: var(--ink-3);
-  line-height: 1.7;
-}
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 16px;
-}
-.chips button {
-  border: 1px solid var(--line-strong);
-  background: var(--cream);
-  border-radius: 999px;
-  padding: 7px 12px;
-  cursor: pointer;
-}
-.bubble {
-  margin: 14px 0;
-  max-width: 82%;
-}
-.bubble.user {
-  margin-left: auto;
-}
-.who {
-  font-size: 12px;
-  color: var(--ink-3);
-  margin-bottom: 6px;
-}
-.plain,
-.markdown-body {
-  background: var(--paper);
-  padding: 12px 14px;
-  border-radius: var(--r-card);
-}
-.bubble.user .plain {
-  background: #ead8cc;
+
+.profile-bar button:hover {
   color: var(--ink);
 }
-.pics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.pending {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.thumb {
-  position: relative;
-}
-.thumb img {
-  width: 72px;
-  height: 72px;
-  object-fit: cover;
-  border-radius: var(--r-control);
-}
-.thumb button {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 20px;
-  height: 20px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--ink);
-  color: #fff;
-  cursor: pointer;
-}
-.tools {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.attach {
-  cursor: pointer;
-  margin-top: 0;
-}
-.slim {
-  margin-top: 8px;
-  padding: 4px 10px;
-  font-size: 12px;
-}
-.composer {
-  padding: 4px 12px 0;
-}
-.bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 8px;
-  color: var(--ink-3);
-  font-size: 12px;
-}
-@media (max-width: 860px) {
+
+@media (max-width: 900px) {
   .chat {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
-  .sessions {
-    max-height: 180px;
+  /* 窄屏把会话列表压成一条可横滚的矮条，不占掉半屏 */
+  .chat :deep(.sessions) {
+    max-height: 152px;
   }
 }
 </style>

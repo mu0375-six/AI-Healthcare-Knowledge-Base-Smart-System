@@ -9,7 +9,8 @@ import dev.langchain4j.rag.content.Content;
 import dev.langchain4j.rag.content.ContentMetadata;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.rag.query.Query;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -21,15 +22,29 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+@Slf4j
 @Service
-@RequiredArgsConstructor
 public class RagService {
 
     private final VectorizeService vectorizeService;
     private final ContentRetriever contentRetriever;
     private final VectorStore vectorStore;
+    /** 内存备份库的直连引用：「跳过重建」路径只把已算好的向量回灌到这里，不再碰 Milvus 与 embedding。 */
+    private final VectorStore memoryStore;
     private final KbChunkMapper chunkMapper;
     private final KbDocumentMapper documentMapper;
+
+    public RagService(VectorizeService vectorizeService, ContentRetriever contentRetriever,
+                      VectorStore vectorStore,
+                      @Qualifier("memoryVectorStore") VectorStore memoryStore,
+                      KbChunkMapper chunkMapper, KbDocumentMapper documentMapper) {
+        this.vectorizeService = vectorizeService;
+        this.contentRetriever = contentRetriever;
+        this.vectorStore = vectorStore;
+        this.memoryStore = memoryStore;
+        this.chunkMapper = chunkMapper;
+        this.documentMapper = documentMapper;
+    }
 
     @Value("${app.rag.top-k:5}")
     private int topK;
@@ -350,5 +365,62 @@ public class RagService {
             }
         }
         vectorStore.flush();
+    }
+
+    /**
+     * 启动时的增量决策。无条件全量重建会让每条 chunk 都打一次远程 embedding，
+     * 启动时间与 API 费用随知识库线性增长；而绝大多数重启里库里内容根本没变。
+     * 因此先比对 DB chunk 数与向量库条数：一致则不清空，只把已算好的向量搬回
+     * 内存备份库（保住「内存始终有完整备份」）；对不上或回灌失败才走全量重建。
+     *
+     * @param force 强制全量重建（环境变量 APP_KB_FORCE_REINDEX 的逃生口）
+     * @return 执行了全量重建返回 true；判定新鲜、仅做了回灌返回 false
+     */
+    public boolean rebuildIfStale(boolean force) {
+        if (!force) {
+            Long expected = chunkMapper.selectCount(null);
+            Integer stored = null;
+            try {
+                stored = vectorStore.size();
+            } catch (Exception e) {
+                log.warn("读取向量库规模失败: {}", e.toString());
+            }
+            if (expected != null && stored != null
+                    && expected.longValue() == (long) stored
+                    && hydrateMemoryBackup(stored)) {
+                return false;
+            }
+        }
+        log.info("开始全量重建向量{}", force ? "（APP_KB_FORCE_REINDEX=true）" : "");
+        rebuildFromDatabase();
+        return true;
+    }
+
+    /**
+     * 从路由向量库批量读回全部切片灌进内存备份库。
+     * 读回来的条数必须与向量库规模一致才承认回灌成功 —— Milvus 半途出错时宁肯
+     * 走全量重建，也不能留下一个看似可用实则残缺的内存库。
+     */
+    private boolean hydrateMemoryBackup(int stored) {
+        List<StoredChunk> all;
+        try {
+            all = vectorStore.loadAll();
+        } catch (UnsupportedOperationException e) {
+            return false;
+        } catch (Exception e) {
+            log.warn("回灌读取向量库失败，退化为全量重建: {}", e.toString());
+            return false;
+        }
+        if (all.size() != stored) {
+            return false;
+        }
+        for (StoredChunk c : all) {
+            memoryStore.upsert(c.chunkId(), c.documentId(), c.vector(),
+                    c.content(), c.title(), c.category(), c.source());
+        }
+        if (!all.isEmpty()) {
+            log.info("知识未变化，跳过重新 embedding，已从向量库回灌内存备份 {} 条", all.size());
+        }
+        return true;
     }
 }

@@ -1,246 +1,171 @@
 <template>
-  <div class="page health">
-    <PageHeader title="健康档案" desc="每位家人一份档案。指标会标出高低，也可以直接带进问答。">
-      <template #extra>
-        <button class="copper-btn" type="button" @click="openCreate">新建档案</button>
-      </template>
-    </PageHeader>
-
-    <div class="members">
-      <button
-        v-for="p in profiles"
-        :key="p.id"
-        class="member card"
-        :class="{ active: p.id === currentId }"
-        type="button"
-        @click="select(p.id!)"
-      >
-        <span class="av">{{ initial(p.displayName) }}</span>
-        <span>
-          <b>{{ p.displayName || '未命名' }}</b>
-          <i>{{ p.relation || '档案' }} · {{ p.age ? p.age + '岁' : '年龄未填' }}</i>
-        </span>
-      </button>
-      <button class="member add card" type="button" @click="openCreate">
-        <span class="av plus">+</span>
-        <span>
-          <b>新建档案</b>
-          <i>本人 / 家人</i>
-        </span>
-      </button>
-    </div>
-
-    <div v-if="!current" class="empty-sheet">
-      <img src="/art/empty-record.svg" alt="" />
+  <div class="page">
+    <header class="head">
       <div>
-        <h3>为家人建立第一份档案</h3>
-        <p>比如「爸爸」「妈妈」或「小宝」。建好后再记血压、血糖，或把体检报告写进来。</p>
-        <button class="copper-btn" type="button" @click="openCreate">现在新建</button>
+        <p class="eyebrow">家庭健康</p>
+        <h1>档案</h1>
       </div>
+      <button class="btn btn-primary" type="button" @click="createVisible = true">
+        <span v-html="ICONS.plus"></span>新建档案
+      </button>
+    </header>
+
+    <MemberBar
+      :profiles="profiles"
+      :active-id="currentId"
+      @select="select"
+      @create="createVisible = true"
+    />
+
+    <AlertCenter v-if="alerts.length" :alerts="alerts" :profiles="profiles" @locate="locateProfile" />
+
+    <div v-if="!current" class="panel empty">
+      <span v-html="ICONS.file"></span>
+      <h3>为家人建立第一份档案</h3>
+      <p>比如「爸爸」「妈妈」或「小宝」。建好后记血压、血糖，或把体检报告传进来自动填。</p>
+      <button class="btn btn-primary" type="button" @click="createVisible = true">现在新建</button>
     </div>
 
     <template v-else>
-      <div class="steps">
-        <span :class="{ on: hasBasics }">资料 {{ hasBasics ? '已填' : '未全' }}</span>
-        <span :class="{ on: metrics.length }">指标 {{ metrics.length ? metrics.length + ' 条' : '还没有' }}</span>
-        <span :class="{ on: !!advice }">建议 {{ advice ? '已生成' : '未生成' }}</span>
+      <DossierCard
+        :profile="current"
+        :form="form"
+        :editing="editing"
+        :removable="profiles.length > 1"
+        :relations="relations"
+        @ask="goAsk"
+        @toggle-edit="editing = !editing"
+        @save="saveProfile"
+        @delete="onDelete"
+      />
+
+      <!-- 分段而不是一路堆叠：指标/报告/病史/建议四件事各自完整，
+           叠在一页会让人滚到失去方位。 -->
+      <div class="tabs" role="tablist">
+        <button
+          v-for="t in TABS"
+          :key="t.key"
+          class="tab"
+          type="button"
+          role="tab"
+          :aria-selected="tab === t.key"
+          :class="{ on: tab === t.key }"
+          @click="setTab(t.key)"
+        >
+          {{ t.label }}
+          <em v-if="t.count(counts)" class="num">{{ t.count(counts) }}</em>
+        </button>
       </div>
 
-      <section class="sheet sheet-pad dossier">
-        <div class="who">
-          <span class="av lg">{{ initial(current.displayName) }}</span>
-          <div>
-            <h3>{{ current.displayName }}</h3>
-            <p>
-              {{ current.relation || '档案' }}
-              <template v-if="current.age"> · {{ current.age }}岁</template>
-              <template v-if="current.sex"> · {{ current.sex }}</template>
-              <template v-if="bmi != null"> · BMI {{ bmi.toFixed(1) }}（{{ bmiLabel(bmi) }}）</template>
+      <!-- 指标 -->
+      <section v-show="tab === 'metrics'" class="stack">
+<!-- 只为有数据的指标发卡。没记录过的合并成一行添加入口 ——
+             一张写着"还没有记录"的空卡片不承载任何信息，只占版面。 -->
+        <div v-if="filledCards.length" class="cards">
+          <article v-for="c in filledCards" :key="c.type" class="tile card-pad">
+            <LabStrip :type="c.type" :value="c.latest" :unit="c.unit" />
+            <p class="delta">
+              {{ c.delta == null ? '还没有第二次记录' : `较上次 ${c.delta > 0 ? '+' : ''}${c.delta}` }}
             </p>
-            <p v-if="current.allergies" class="allergy">过敏：{{ current.allergies }}</p>
-          </div>
-          <div class="who-actions">
-            <button class="copper-btn slim" type="button" @click="goAsk">结合档案去问</button>
-            <button class="ghost-btn slim" type="button" @click="editing = !editing">{{ editing ? '收起资料' : '编辑资料' }}</button>
-          </div>
+          </article>
         </div>
 
-        <el-form v-if="editing" label-width="88px" class="form">
-          <el-form-item label="称呼"><el-input v-model="form.displayName" placeholder="如：我 / 爸爸 / 小宝" /></el-form-item>
-          <el-form-item label="关系">
-            <el-select v-model="form.relation" style="width: 100%">
-              <el-option v-for="r in relations" :key="r" :label="r" :value="r" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="年龄"><el-input-number v-model="form.age" :min="0" :max="120" /></el-form-item>
-          <el-form-item label="性别">
-            <el-select v-model="form.sex" style="width: 100%">
-              <el-option label="男" value="男" />
-              <el-option label="女" value="女" />
-              <el-option label="其他" value="其他" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="身高 cm"><el-input-number v-model="form.heightCm" :min="50" :max="250" :precision="1" /></el-form-item>
-          <el-form-item label="体重 kg"><el-input-number v-model="form.weightKg" :min="10" :max="300" :precision="1" /></el-form-item>
-          <el-form-item label="过敏史"><el-input v-model="form.allergies" type="textarea" :rows="2" /></el-form-item>
-          <el-form-item label="共享">
-            <el-switch v-model="form.sharedToAdmin" />
-            <span class="tip">仅管理员可读，默认关闭</span>
-          </el-form-item>
-          <div class="form-bar">
-            <button class="ink-btn slim" type="button" @click="saveProfile">保存资料</button>
-            <button v-if="profiles.length > 1" class="ghost-btn slim" type="button" @click="onDelete">删除此档案</button>
-          </div>
-        </el-form>
+        <button v-if="emptyTypes.length" class="add-row" type="button" @click="openAdd">
+          <span class="add-ico" v-html="ICONS.plus"></span>
+          <span class="add-txt">
+            <b>还可以记录：{{ emptyTypes.join(' · ') }}</b>
+            <i>记两次以上才看得出走势</i>
+          </span>
+        </button>
+
+        <MetricTrendSection
+          ref="trendSection"
+          :profile="current"
+          :metrics="metrics"
+          :trends="trends"
+          @add="onAddMetric"
+          @delete-metric="onDelMetric"
+          @reload="reloadMetrics"
+          @from-report="goReports"
+        />
       </section>
 
-      <div class="cards">
-        <article v-for="c in metricCards" :key="c.type" class="metric-card card" :class="c.flag">
-          <div class="mc-top">
-            <span>{{ c.type }}</span>
-            <em>{{ flagText(c.flag) }}</em>
-          </div>
-          <strong>{{ c.latest == null ? '—' : c.latest }}<small>{{ c.unit }}</small></strong>
-          <p>{{ c.ref }}</p>
-          <p v-if="c.delta != null" class="delta">较上次 {{ c.delta > 0 ? '+' : '' }}{{ c.delta }}</p>
-          <p v-else class="delta">还没有第二次记录</p>
-        </article>
-      </div>
-
-      <section class="sheet sheet-pad block">
-        <div class="sec">
-          <h3>指标趋势</h3>
-          <div class="sec-btns">
-            <button class="ghost-btn slim" type="button" @click="$router.push({ path: '/reports', query: { profileId: String(currentId) } })">从报告写入</button>
-            <button class="copper-btn slim" type="button" @click="openMetric">新增指标</button>
-          </div>
+      <!-- 报告：原「报告解读」页并入这里。上传报告产出的指标本来
+           就写进档案，拆成两个目的地会让一条流程跨页。 -->
+      <section v-show="tab === 'reports'" class="shell">
+        <div class="section-head">
+          <h3>体检与化验报告</h3>
+          <router-link
+            class="spacer btn btn-primary btn-sm"
+            :to="{ path: '/reports/upload', query: { profileId: String(currentId) } }"
+          >
+            <span v-html="ICONS.upload"></span>上传报告
+          </router-link>
         </div>
-        <ul v-if="trends.length" class="trend-list">
-          <li v-for="t in trends" :key="t.metricType" :class="{ alert: t.alert }">
-            <span class="dot" :class="t.latestFlag"></span>
-            <span class="note">{{ t.note }}</span>
-          </li>
-        </ul>
-        <v-chart v-if="hasChart" :option="chartOption" autoresize style="height: 260px" />
-        <div v-else class="quiet">还没有可绘图的指标。点「新增指标」，或去报告解读后写入这份档案。</div>
-        <el-table v-if="metrics.length" :data="metrics" class="mt" empty-text="还没有指标">
-          <el-table-column prop="metricType" label="类型" width="120" />
-          <el-table-column prop="value" label="数值" width="90" />
-          <el-table-column prop="unit" label="单位" width="90" />
-          <el-table-column label="高低" width="80">
-            <template #default="{ row }">{{ flagText(flagOf(row.metricType, row.value)) }}</template>
-          </el-table-column>
-          <el-table-column label="记录时间">
-            <template #default="{ row }">{{ formatWhen(row.recordedAt) }}</template>
-          </el-table-column>
-          <el-table-column prop="note" label="备注" />
-          <el-table-column label="" width="80">
-            <template #default="{ row }">
-              <el-button text type="danger" @click="onDelMetric(row.id)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+
+        <div v-if="reportsLoading" class="stack">
+          <div v-for="n in 3" :key="n" class="skeleton" style="height: 58px; border-radius: var(--r-card)"></div>
+        </div>
+
+        <div v-else-if="!reports.length" class="empty">
+          <span v-html="ICONS.report"></span>
+          <h3>还没有报告</h3>
+          <p>传一份体检单或化验单，系统会抽出指标、标出高低，并写进这份档案。</p>
+          <router-link
+            class="btn btn-primary"
+            :to="{ path: '/reports/upload', query: { profileId: String(currentId) } }"
+          >上传报告</router-link>
+        </div>
+
+        <button
+          v-for="r in reports"
+          :key="r.id"
+          class="rep"
+          type="button"
+          @click="router.push('/reports/' + r.id)"
+        >
+          <span class="rep-ico" v-html="ICONS.report"></span>
+          <span class="rep-main">
+            <b>{{ r.filename }}</b>
+            <i v-if="r.summary">{{ brief(r.summary) }}</i>
+          </span>
+          <time>{{ formatWhen(r.createdAt) }}</time>
+        </button>
       </section>
 
-      <section class="sheet sheet-pad block">
-        <div class="sec">
-          <h3>病史</h3>
-          <button class="copper-btn slim" type="button" @click="histVisible = true">新增病史</button>
-        </div>
-        <el-table :data="histories" empty-text="还没有病史，可点「新增病史」">
-          <el-table-column prop="disease" label="疾病" />
-          <el-table-column prop="diagnosedAt" label="诊断日期" />
-          <el-table-column prop="status" label="状态" />
-          <el-table-column prop="note" label="备注" />
-          <el-table-column label="" width="80">
-            <template #default="{ row }">
-              <el-button text type="danger" @click="onDelHist(row.id)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+      <!-- 病史 -->
+      <section v-show="tab === 'history'">
+        <HistorySection :profile="current" :histories="histories" @add="onAddHist" @delete-history="onDelHist" />
       </section>
 
-      <section class="sheet sheet-pad block">
-        <div class="sec">
-          <h3>健康建议</h3>
-          <button class="ink-btn slim" type="button" :disabled="adviceLoading || !metrics.length" @click="onAdvice">
-            {{ adviceLoading ? '生成中…' : '为「' + current.displayName + '」生成建议' }}
-          </button>
-        </div>
-        <p v-if="adviceBasis" class="basis">{{ adviceBasis }}</p>
-        <div v-if="advice" class="markdown-body" v-html="renderMarkdown(advice, terms)"></div>
-        <div v-else class="quiet">{{ metrics.length ? '可以生成针对当前档案的建议，生成后会保存在这里。' : '先记一条血压或血糖，再生成建议。' }}</div>
-        <div class="disclaimer">以上内容仅供健康科普参考，不能替代执业医师的面诊、检查与处方。如有不适请及时就医。</div>
+      <!-- 建议 -->
+      <section v-show="tab === 'advice'">
+        <AdviceSection
+          :profile="current"
+          :metrics="metrics"
+          :advice="advice"
+          :basis="adviceBasis"
+          :loading="adviceLoading"
+          :terms="terms"
+          @generate="onAdvice"
+        />
       </section>
     </template>
 
-    <el-dialog v-model="createVisible" title="给谁建档" width="440px">
-      <div class="quick">
-        <button v-for="q in quickRels" :key="q.relation" type="button" @click="pickRel(q)">{{ q.label }}</button>
-      </div>
-      <el-form label-width="80px">
-        <el-form-item label="称呼"><el-input v-model="createForm.displayName" placeholder="如：爸爸" /></el-form-item>
-        <el-form-item label="关系">
-          <el-select v-model="createForm.relation" style="width: 200px">
-            <el-option v-for="r in relations" :key="r" :label="r" :value="r" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="年龄"><el-input-number v-model="createForm.age" :min="0" :max="120" /></el-form-item>
-        <el-form-item label="性别">
-          <el-select v-model="createForm.sex" style="width: 160px">
-            <el-option label="男" value="男" />
-            <el-option label="女" value="女" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="createVisible = false">取消</el-button>
-        <el-button type="primary" @click="onCreate">创建</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="metricVisible" title="新增指标" width="420px">
-      <el-form label-width="80px">
-        <el-form-item label="类型">
-          <el-select v-model="metricForm.metricType" filterable allow-create @change="onMetricType">
-            <el-option v-for="t in metricTypes" :key="t" :label="t" :value="t" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="数值"><el-input-number v-model="metricForm.value" :precision="1" /></el-form-item>
-        <el-form-item label="单位"><el-input v-model="metricForm.unit" /></el-form-item>
-        <el-form-item label="时间"><el-date-picker v-model="metricForm.recordedAt" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" /></el-form-item>
-        <el-form-item label="备注"><el-input v-model="metricForm.note" /></el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="metricVisible = false">取消</el-button>
-        <el-button type="primary" @click="onAddMetric">确定</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="histVisible" title="新增病史" width="420px">
-      <el-form label-width="80px">
-        <el-form-item label="疾病"><el-input v-model="histForm.disease" /></el-form-item>
-        <el-form-item label="日期"><el-date-picker v-model="histForm.diagnosedAt" type="date" value-format="YYYY-MM-DD" /></el-form-item>
-        <el-form-item label="状态"><el-input v-model="histForm.status" placeholder="随访中 / 已控制" /></el-form-item>
-        <el-form-item label="备注"><el-input v-model="histForm.note" /></el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="histVisible = false">取消</el-button>
-        <el-button type="primary" @click="onAddHist">确定</el-button>
-      </template>
-    </el-dialog>
+    <CreateProfileDialog
+      :visible="createVisible"
+      :relations="relations"
+      @close="createVisible = false"
+      @create="onCreate"
+    />
+    <MedicalDisclaimer />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import {
   addHistory,
   addMetric,
@@ -249,53 +174,88 @@ import {
   deleteMetric,
   deleteProfile,
   generateAdvice,
+  listAlerts,
   listHistories,
   listMetrics,
   listProfiles,
   updateProfileById,
   listTrends,
+  type MetricAlertItem,
+  type MetricTrend,
 } from '@/api/health'
-import type { MetricTrend } from '@/api/health'
-import { listTerms } from '@/api/knowledge'
-import type { HealthHistory, HealthMetric, HealthProfile } from '@/api/types'
-import { renderMarkdown } from '@/utils/markdown'
-import { formatWhen, initial } from '@/utils/format'
-import { CARD_TYPES, bmiLabel, bmiOf, flagOf, flagText, refText, unitOf } from '@/utils/metrics'
-import PageHeader from '@/components/PageHeader.vue'
-
-use([CanvasRenderer, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
+import { listReports } from '@/api/reports'
+import type { ExamReport, HealthHistory, HealthMetric, HealthProfile } from '@/api/types'
+import { formatWhen } from '@/utils/format'
+import { CARD_TYPES, flagOf, loadReference, unitOf } from '@/utils/metrics'
+import { useTerms } from '@/composables/useTerms'
+import { ICONS } from '@/utils/icons'
+import LabStrip from '@/components/LabStrip.vue'
+import MedicalDisclaimer from '@/components/MedicalDisclaimer.vue'
+import MemberBar from '@/components/health/MemberBar.vue'
+import AlertCenter from '@/components/health/AlertCenter.vue'
+import DossierCard from '@/components/health/DossierCard.vue'
+import MetricTrendSection from '@/components/health/MetricTrendSection.vue'
+import HistorySection from '@/components/health/HistorySection.vue'
+import AdviceSection from '@/components/health/AdviceSection.vue'
+import CreateProfileDialog from '@/components/health/CreateProfileDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
+
 const relations = ['本人', '配偶', '父亲', '母亲', '子女', '其他']
-const metricTypes = [...CARD_TYPES, '餐后血糖', '糖化血红蛋白']
-const quickRels = [
-  { label: '本人', relation: '本人', displayName: '我', age: 30, sex: '男' },
-  { label: '爸爸', relation: '父亲', displayName: '爸爸', age: 58, sex: '男' },
-  { label: '妈妈', relation: '母亲', displayName: '妈妈', age: 56, sex: '女' },
-  { label: '配偶', relation: '配偶', displayName: '爱人', age: 32, sex: '女' },
-  { label: '孩子', relation: '子女', displayName: '小宝', age: 8, sex: '男' },
-]
 const profiles = ref<HealthProfile[]>([])
 const currentId = ref<number | null>(null)
 const editing = ref(false)
 const form = reactive<HealthProfile>({ displayName: '我', relation: '本人', sharedToAdmin: false })
 const metrics = ref<HealthMetric[]>([])
 const trends = ref<MetricTrend[]>([])
+const alerts = ref<MetricAlertItem[]>([])
 const histories = ref<HealthHistory[]>([])
+const reports = ref<ExamReport[]>([])
+const reportsLoading = ref(false)
 const advice = ref('')
 const adviceBasis = ref('')
 const adviceLoading = ref(false)
-const terms = ref<string[]>([])
 const createVisible = ref(false)
-const metricVisible = ref(false)
-const histVisible = ref(false)
-const createForm = reactive({ displayName: '', relation: '父亲', age: 50 as number | undefined, sex: '男' })
-const metricForm = reactive({ metricType: '空腹血糖', value: 5.5, unit: 'mmol/L', recordedAt: '', note: '' })
-const histForm = reactive({ disease: '', diagnosedAt: '', status: '随访中', note: '' })
 const current = computed(() => profiles.value.find((p) => p.id === currentId.value) || null)
-const bmi = computed(() => bmiOf(current.value?.heightCm, current.value?.weightKg))
-const hasBasics = computed(() => !!(current.value?.age && current.value?.sex))
+const { terms, loadTerms } = useTerms()
+
+type TabKey = 'metrics' | 'reports' | 'history' | 'advice'
+const TABS: { key: TabKey; label: string; count: (c: Counts) => number | string }[] = [
+  { key: 'metrics', label: '指标', count: (c) => c.metrics },
+  { key: 'reports', label: '报告', count: (c) => c.reports },
+  { key: 'history', label: '病史', count: (c) => c.histories },
+  { key: 'advice', label: '建议', count: () => '' },
+]
+type Counts = { metrics: number; reports: number; histories: number }
+const counts = computed<Counts>(() => ({
+  metrics: metrics.value.length,
+  reports: reports.value.length,
+  histories: histories.value.length,
+}))
+
+// tab 存在 query 里：/reports 的重定向要能直接落到报告分段，
+// 刷新与前进后退也保持在同一分段。
+const tab = ref<TabKey>((route.query.tab as TabKey) || 'metrics')
+function setTab(k: TabKey) {
+  tab.value = k
+  router.replace({ query: { ...route.query, tab: k } })
+}
+watch(
+  () => route.query.tab,
+  (v) => {
+    if (v && v !== tab.value) tab.value = v as TabKey
+  },
+)
+
+const filledCards = computed(() => metricCards.value.filter((c) => c.latest != null))
+const emptyTypes = computed(() => metricCards.value.filter((c) => c.latest == null).map((c) => c.type))
+const trendSection = ref<InstanceType<typeof MetricTrendSection>>()
+
+/** 「还可以记录」直接唤起趋势区里已有的新增指标对话框，不另造一个。 */
+function openAdd() {
+  trendSection.value?.openDialog?.()
+}
 
 const metricCards = computed(() =>
   CARD_TYPES.map((type) => {
@@ -307,10 +267,9 @@ const metricCards = computed(() =>
     const value = latest?.value
     return {
       type,
-      latest: value,
+      latest: value ?? null,
       unit: latest?.unit || unitOf(type),
       flag: flagOf(type, value),
-      ref: '参考 ' + refText(type),
       delta: latest && prev ? Number((latest.value - prev.value).toFixed(1)) : null,
     }
   }),
@@ -318,14 +277,32 @@ const metricCards = computed(() =>
 
 onMounted(async () => {
   const prefer = Number(route.query.id) || undefined
+  await loadReference()
   await loadProfiles(prefer)
-  if (route.query.new === '1') openCreate()
-  try {
-    terms.value = (await listTerms()).data || []
-  } catch {
-    terms.value = []
-  }
+  if (route.query.new === '1') createVisible.value = true
+  await loadTerms()
+  alerts.value = (await listAlerts()).data || []
+  loadReports()
 })
+
+/** 报告列表按当前档案过滤：后端返回全部，这里只留归属这份档案的。 */
+/** 摘要可能很长，列表里只取第一句/首行，超长截断。 */
+function brief(text: string) {
+  const line = text.replace(/[#*`>]/g, '').split(/[\n。]/).find((x) => x.trim()) || ''
+  return line.length > 42 ? line.slice(0, 42) + '…' : line
+}
+
+async function loadReports() {
+  reportsLoading.value = true
+  try {
+    const all = (await listReports()).data || []
+    reports.value = all.filter((r) => !r.profileId || r.profileId === currentId.value)
+  } catch {
+    reports.value = []
+  } finally {
+    reportsLoading.value = false
+  }
+}
 
 async function loadProfiles(preferId?: number) {
   profiles.value = (await listProfiles()).data || []
@@ -343,6 +320,7 @@ async function select(id: number) {
   histories.value = (await listHistories(id)).data || []
   advice.value = p?.lastAdvice || ''
   adviceBasis.value = p?.adviceAt ? '上次生成于 ' + formatWhen(p.adviceAt) : ''
+  loadReports()
 }
 
 function assignForm(p: HealthProfile) {
@@ -357,39 +335,21 @@ function assignForm(p: HealthProfile) {
   form.sharedToAdmin = !!p.sharedToAdmin
 }
 
-function openCreate() {
-  pickRel(quickRels[1])
-  createVisible.value = true
-}
-
-function pickRel(q: (typeof quickRels)[number]) {
-  createForm.displayName = q.displayName
-  createForm.relation = q.relation
-  createForm.age = q.age
-  createForm.sex = q.sex
-}
-
 function goAsk() {
   if (!currentId.value) return
   router.push({ path: '/chat', query: { profileId: String(currentId.value) } })
 }
 
-function openMetric() {
-  onMetricType(metricForm.metricType)
-  metricVisible.value = true
+function goReports() {
+  router.push({ path: '/reports/upload', query: { profileId: String(currentId.value) } })
 }
 
-function onMetricType(type: string) {
-  const u = unitOf(type)
-  if (u) metricForm.unit = u
-}
-
-async function onCreate() {
-  if (!createForm.displayName.trim()) {
+async function onCreate(payload: { displayName: string; relation: string; age?: number; sex: string }) {
+  if (!payload.displayName) {
     ElMessage.warning('请填写称呼，例如「爸爸」')
     return
   }
-  const created = (await createProfile({ ...createForm, displayName: createForm.displayName.trim() })).data
+  const created = (await createProfile(payload)).data
   createVisible.value = false
   ElMessage.success('档案已创建，可以开始填写指标')
   await loadProfiles(created.id)
@@ -411,20 +371,23 @@ async function onDelete() {
   await loadProfiles()
 }
 
-async function onAddMetric() {
-  if (!currentId.value) return
-  const payload: Partial<HealthMetric> & { profileId: number } = {
-    profileId: currentId.value,
-    metricType: metricForm.metricType,
-    value: metricForm.value,
-    unit: metricForm.unit || unitOf(metricForm.metricType),
-    note: metricForm.note,
-  }
-  if (metricForm.recordedAt) payload.recordedAt = metricForm.recordedAt
+async function onAddMetric(payload: Partial<HealthMetric> & { profileId: number }) {
   await addMetric(payload)
-  metricVisible.value = false
-  metrics.value = (await listMetrics(currentId.value)).data || []
-  trends.value = (await listTrends(currentId.value)).data || []
+  await reloadMetrics()
+}
+
+async function reloadMetrics() {
+  if (currentId.value) {
+    metrics.value = (await listMetrics(currentId.value)).data || []
+    trends.value = (await listTrends(currentId.value)).data || []
+    alerts.value = (await listAlerts()).data || []
+  }
+}
+
+async function locateProfile(profileId: number | null) {
+  if (profileId && profileId !== currentId.value) {
+    await select(profileId)
+  }
 }
 
 async function onDelMetric(id: number) {
@@ -435,18 +398,9 @@ async function onDelMetric(id: number) {
   }
 }
 
-async function onAddHist() {
-  if (!currentId.value) return
-  const payload: Partial<HealthHistory> & { profileId: number } = {
-    profileId: currentId.value,
-    disease: histForm.disease,
-    status: histForm.status,
-    note: histForm.note,
-  }
-  if (histForm.diagnosedAt) payload.diagnosedAt = histForm.diagnosedAt
+async function onAddHist(payload: Partial<HealthHistory> & { profileId: number }) {
   await addHistory(payload)
-  histVisible.value = false
-  histories.value = (await listHistories(currentId.value)).data || []
+  histories.value = (await listHistories(payload.profileId)).data || []
 }
 
 async function onDelHist(id: number) {
@@ -466,298 +420,230 @@ async function onAdvice() {
     adviceLoading.value = false
   }
 }
-
-const hasChart = computed(() => metrics.value.length > 0)
-const chartOption = computed(() => {
-  const groups = new Map<string, { t: string; v: number }[]>()
-  for (const m of [...metrics.value].sort((a, b) => String(a.recordedAt).localeCompare(String(b.recordedAt)))) {
-    const arr = groups.get(m.metricType) || []
-    arr.push({ t: formatWhen(m.recordedAt), v: m.value })
-    groups.set(m.metricType, arr)
-  }
-  const times = Array.from(new Set([...groups.values()].flat().map((x) => x.t)))
-  return {
-    tooltip: { trigger: 'axis' },
-    legend: { data: Array.from(groups.keys()) },
-    grid: { left: 40, right: 16, top: 32, bottom: 28 },
-    xAxis: { type: 'category', data: times },
-    yAxis: { type: 'value' },
-    series: Array.from(groups.entries()).map(([name, arr]) => ({
-      name,
-      type: 'line',
-      smooth: true,
-      data: times.map((t) => arr.find((x) => x.t === t)?.v ?? null),
-    })),
-    color: ['#c45d3a', '#2c5648', '#b8965a', '#1d4ed8'],
-  }
-})
 </script>
 
 <style scoped>
-/* 趋势提示：连续超标的条目单独标红，这是这块最该被一眼看到的信息 */
-.trend-list {
-  list-style: none;
-  margin: 0 0 14px;
-  padding: 0;
+.page {
   display: grid;
-  gap: 6px;
-}
-.trend-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--ink-2);
-}
-.trend-list li.alert .note {
-  color: #b42318;
-  font-weight: 600;
-}
-.trend-list .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  margin-top: 7px;
-  flex: none;
-  background: var(--ink-3);
-}
-.trend-list .dot.high,
-.trend-list .dot.low {
-  background: #d97706;
-}
-.trend-list .dot.normal {
-  background: #15803d;
+  gap: 20px;
 }
 
-.members {
+.head {
   display: flex;
-  gap: 10px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.head h1 {
+  margin-top: 4px;
+}
+
+/* ---- 分段 ---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--sunk);
+  border-radius: 999px;
+  width: fit-content;
+  max-width: 100%;
   overflow-x: auto;
-  padding-bottom: 8px;
-  margin-bottom: 16px;
+  scrollbar-width: none;
 }
-.member {
-  min-width: 176px;
-  display: flex;
-  gap: 10px;
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: inline-flex;
   align-items: center;
-  text-align: left;
-  padding: 12px 14px;
+  gap: 6px;
+  border: 0;
+  background: none;
   cursor: pointer;
+  padding: 7px 16px;
+  border-radius: 999px;
+  color: var(--ink-mute);
+  font-size: 14px;
+  font-weight: 550;
+  white-space: nowrap;
+  transition: background 0.18s var(--ease-out), color 0.15s ease, box-shadow 0.2s ease;
 }
-.member.active {
-  border-color: var(--copper);
-  box-shadow: 0 0 0 1px rgba(196, 93, 58, 0.25);
+
+.tab.on {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
 }
-.member.add {
-  border-style: dashed;
+
+.tab em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--ink-faint);
 }
-.member b {
+
+@media (hover: hover) and (pointer: fine) {
+  .tab:not(.on):hover {
+    color: var(--ink);
+  }
+}
+
+/* ---- 指标卡 ---- */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  /* 按内容定高：没数据的卡片不该被有数据的撑成同样高 */
+  align-items: start;
+}
+
+.card-pad {
+  padding: 16px 18px 14px;
+}
+
+.delta {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* 未记录指标的合并入口：一行，虚线，明确是"去添加"而不是"没数据" */
+.add-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--edge-strong);
+  border-radius: var(--r-card);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ink);
+  transition: border-color 0.3s var(--ease-soft), background 0.4s var(--ease),
+    transform 0.4s var(--ease);
+}
+
+.add-row:active {
+  transform: scale(0.99);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .add-row:hover {
+    border-color: var(--accent-line);
+    background: var(--accent-wash);
+  }
+}
+
+.add-ico {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--tray);
+  color: var(--ink-mute);
+  flex-shrink: 0;
+}
+
+.add-ico :deep(svg) {
+  width: 17px;
+  height: 17px;
   display: block;
 }
-.member i {
+
+.add-txt b {
+  display: block;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.add-txt i {
   display: block;
   font-style: normal;
-  color: var(--ink-3);
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+/* ---- 报告行 ---- */
+.rep {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--edge);
+  padding: 13px 2px;
+  cursor: pointer;
+  color: var(--ink);
+  transition: color 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rep:hover {
+    color: var(--accent);
+  }
+}
+
+.rep-ico {
+  color: var(--ink-faint);
+  flex-shrink: 0;
+}
+
+.rep-ico :deep(svg) {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.rep-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.rep-main b {
+  display: block;
+  font-weight: 500;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rep-main i {
+  display: block;
+  font-style: normal;
+  color: var(--ink-faint);
   font-size: 12px;
   margin-top: 2px;
 }
-.av {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: #ead8cc;
-  color: var(--copper-deep);
-  display: grid;
-  place-items: center;
-  font-family: var(--font-serif);
+
+.rep time {
+  color: var(--ink-faint);
+  font-size: 12px;
   flex-shrink: 0;
 }
-.av.lg {
-  width: 52px;
-  height: 52px;
-  font-size: 22px;
-}
-.av.plus {
-  background: var(--paper-deep);
-  font-size: 22px;
-  color: var(--ink-2);
-}
-.steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.steps span {
-  font-size: 12px;
-  color: var(--ink-3);
-  background: var(--paper-deep);
-  padding: 5px 10px;
-  border-radius: 999px;
-}
-.steps span.on {
-  color: var(--moss);
-  background: rgba(44, 86, 72, 0.1);
-}
-.dossier .who {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-}
-.dossier h3 {
-  margin: 0 0 4px;
-  font-size: 24px;
-}
-.dossier p {
-  margin: 0;
-  color: var(--ink-3);
-}
-.allergy {
-  margin-top: 6px !important;
-  color: var(--copper-deep) !important;
-}
-.who-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.form {
-  margin-top: 18px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-.form-bar {
-  display: flex;
-  gap: 10px;
-}
-.cards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin: 14px 0;
-}
-.metric-card {
-  padding: 14px 14px 12px;
-}
-.metric-card.high {
-  border-color: #e8b4ae;
-}
-.metric-card.low {
-  border-color: #b7c7e8;
-}
-.mc-top {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  color: var(--ink-3);
-}
-.metric-card strong {
-  display: block;
-  font-family: var(--font-serif);
-  font-size: 28px;
-  font-weight: 600;
-  margin: 6px 0 4px;
-}
-.metric-card small {
-  font-size: 13px;
-  margin-left: 4px;
-  color: var(--ink-3);
-}
-.metric-card p {
-  margin: 0;
-  font-size: 12px;
-  color: var(--ink-3);
-}
-.delta {
-  margin-top: 4px !important;
-}
-.block {
-  margin-top: 14px;
-}
-.sec {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  gap: 10px;
-}
-.sec-btns {
-  display: flex;
-  gap: 8px;
-}
-.mt {
-  margin-top: 12px;
-}
-h3 {
-  margin: 0;
-  font-size: 20px;
-}
-.slim {
-  padding: 6px 12px;
-  font-size: 13px;
-}
-.tip,
-.basis {
-  color: var(--ink-3);
-  font-size: 13px;
-}
-.basis {
-  margin: 0 0 10px;
-}
-.quiet {
-  color: var(--ink-3);
-  font-size: 13px;
-  line-height: 1.7;
-  padding: 18px 0;
-}
-.quick {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.quick button {
-  border: 1px solid var(--line-strong);
-  background: var(--cream);
-  border-radius: 999px;
-  padding: 6px 12px;
-  cursor: pointer;
-}
-.empty-sheet {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 24px;
-}
-.empty-sheet img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  min-height: 220px;
-}
-.empty-sheet div {
-  padding: 28px 24px 28px 0;
-}
-.empty-sheet h3 {
-  font-size: 28px;
-  margin: 0 0 10px;
-}
-.empty-sheet p {
-  color: var(--ink-3);
-  line-height: 1.7;
-}
-@media (max-width: 900px) {
-  .cards,
-  .empty-sheet,
-  .dossier .who {
-    grid-template-columns: 1fr 1fr;
-    flex-wrap: wrap;
+
+@media (max-width: 720px) {
+  .head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
   }
-  .who-actions {
-    margin-left: 0;
-    width: 100%;
+  .cards {
+    grid-template-columns: 1fr;
+  }
+  .rep {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .rep time {
+    margin-left: 32px;
   }
 }
 </style>

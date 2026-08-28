@@ -13,6 +13,7 @@ import com.healthkb.service.KnowledgeService;
 import com.healthkb.service.OfficialKnowledgeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.io.ClassPathResource;
@@ -34,13 +35,29 @@ public class DataSeeder implements ApplicationRunner {
     private final RagService ragService;
     private final ObjectMapper objectMapper;
 
+    /** 强制全量重建的逃生口：内容变了但条数没变时，数量比对发现不了，用它可以手动触发。 */
+    @Value("${app.kb.force-reindex:false}")
+    private boolean forceReindex;
+
+    /** 演示账号开关。默认创建；对外部署或安全评审场景可设 APP_SEED_DEMO_ACCOUNTS=false 关闭。 */
+    @Value("${app.seed-demo-accounts:true}")
+    private boolean seedDemoAccounts;
+
     @Override
     public void run(ApplicationArguments args) {
-        ensureUser("admin", "Admin123!", "系统管理员", MedicalConstants.ROLE_ADMIN);
-        ensureUser("user", "User123!", "演示用户", MedicalConstants.ROLE_USER);
+        if (seedDemoAccounts) {
+            ensureUser("admin", "Admin123!", "系统管理员", MedicalConstants.ROLE_ADMIN);
+            ensureUser("user", "User123!", "演示用户", MedicalConstants.ROLE_USER);
+        } else {
+            log.info("已按配置跳过演示账号创建（app.seed-demo-accounts=false）");
+        }
         seedOfficialKnowledge();
-        ragService.rebuildFromDatabase();
-        log.info("启动完成，向量条数={}", ragService.vectorCount());
+        boolean rebuilt = ragService.rebuildIfStale(forceReindex);
+        if (!rebuilt) {
+            log.info("启动完成（知识未变化，跳过重建），向量条数={}", ragService.vectorCount());
+        } else {
+            log.info("启动完成，向量条数={}", ragService.vectorCount());
+        }
     }
 
     private void ensureUser(String username, String rawPassword, String nickname, String role) {

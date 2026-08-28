@@ -1,7 +1,8 @@
 package com.healthkb.service;
 
-import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import cn.hutool.crypto.digest.DigestUtil;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -9,6 +10,7 @@ import com.healthkb.cache.CacheService;
 import com.healthkb.common.AppException;
 import com.healthkb.common.EmergencyRules;
 import com.healthkb.common.MedicalConstants;
+import com.healthkb.dto.PageResult;
 import com.healthkb.entity.ChatImage;
 import com.healthkb.entity.ChatMessage;
 import com.healthkb.entity.ChatSession;
@@ -35,7 +37,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -61,11 +66,19 @@ public class ChatService {
     @Value("${app.rag.context-cache-minutes:30}")
     private int contextCacheMinutes;
 
-    private final ExecutorService ssePool = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "chat-sse");
-        t.setDaemon(true);
-        return t;
-    });
+    /**
+     * 有界 SSE 线程池。cachedThreadPool 每个并发回答占一条线程、阻塞整个 LLM 流式时长，
+     * 低速并发就能把线程数刷到任意高。这里封顶 32 并发 + 排队 16，
+     * 超出按「稍后再试」拒绝 —— 宁可明确拒绝也不能把进程拖垮。
+     */
+    private final ExecutorService ssePool = new ThreadPoolExecutor(
+            8, 32, 60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(16),
+            r -> {
+                Thread t = new Thread(r, "chat-sse");
+                t.setDaemon(true);
+                return t;
+            });
 
     public ChatSession createSession(String title) {
         ChatSession s = new ChatSession();
@@ -83,12 +96,53 @@ public class ChatService {
                 .orderByDesc(ChatSession::getUpdatedAt));
     }
 
+    /** 分页版：侧栏只展示最近一页，会话攒多了不再全量拉。 */
+    public PageResult<ChatSession> listSessions(int page, int size) {
+        Page<ChatSession> p = sessionMapper.selectPage(new Page<>(page, size),
+                new LambdaQueryWrapper<ChatSession>()
+                        .eq(ChatSession::getUserId, SecurityUtils.currentUserId())
+                        .orderByDesc(ChatSession::getUpdatedAt)
+                        // updated_at 是秒级 TIMESTAMP，同秒并列时以 id 兜底，
+                        // 否则 LIMIT/OFFSET 翻页在同秒记录间可能重复或漏行
+                        .orderByDesc(ChatSession::getId));
+        return PageResult.of(p.getRecords(), p.getTotal(), page, size);
+    }
+
     public List<ChatMessage> listMessages(Long sessionId) {
         ChatSession session = requireOwnedSession(sessionId);
-        List<ChatMessage> msgs = messageMapper.selectList(new LambdaQueryWrapper<ChatMessage>()
+        return messageMapper.selectList(new LambdaQueryWrapper<ChatMessage>()
                 .eq(ChatMessage::getSessionId, session.getId())
                 .orderByAsc(ChatMessage::getCreatedAt));
-        return msgs;
+    }
+
+    /**
+     * 分页版消息：按时间倒序取页（第 1 页=最新），前端拿到后倒序展示，
+     * 「加载更早」往前翻页。这样无需知道总数也能自然分页。
+     */
+    public PageResult<ChatMessage> listMessages(Long sessionId, int page, int size) {
+        ChatSession session = requireOwnedSession(sessionId);
+        Page<ChatMessage> p = messageMapper.selectPage(new Page<>(page, size),
+                new LambdaQueryWrapper<ChatMessage>()
+                        .eq(ChatMessage::getSessionId, session.getId())
+                        .orderByDesc(ChatMessage::getCreatedAt)
+                        // created_at 是秒级 TIMESTAMP，同秒多条消息（流式场景常见）
+                        // 必须用 id 兜底，否则翻页会出现重复/缺失消息
+                        .orderByDesc(ChatMessage::getId));
+        List<ChatMessage> oldestFirst = new ArrayList<>(p.getRecords());
+        java.util.Collections.reverse(oldestFirst);
+        return PageResult.of(oldestFirst, p.getTotal(), page, size);
+    }
+
+    /** 重命名会话：属主校验与删除同源。 */
+    public ChatSession renameSession(Long sessionId, String title) {
+        ChatSession session = requireOwnedSession(sessionId);
+        String trimmed = title == null ? "" : title.trim();
+        if (trimmed.isEmpty()) {
+            throw AppException.badRequest("会话名称不能为空");
+        }
+        session.setTitle(trimmed);
+        sessionMapper.updateById(session);
+        return session;
     }
 
     public void deleteSession(Long sessionId) {
@@ -154,7 +208,11 @@ public class ChatService {
         SseEmitter emitter = new SseEmitter(180_000L);
         Long userMsgId = userMsg.getId();
         String questionForModel = q;
-        ssePool.execute(() -> runAsk(emitter, session, assistant, questionForModel, userId, userMsgId, images, profileId));
+        try {
+            ssePool.execute(() -> runAsk(emitter, session, assistant, questionForModel, userId, userMsgId, images, profileId));
+        } catch (RejectedExecutionException e) {
+            throw AppException.tooManyRequests("当前提问人数较多，请稍后再试");
+        }
         return emitter;
     }
 
@@ -336,15 +394,25 @@ public class ChatService {
                 .notIn(ChatMessage::getId, excludeAssistantId, excludeUserId)
                 .orderByDesc(ChatMessage::getCreatedAt)
                 .last("LIMIT " + Math.max(2, contextTurns)));
+        // 附件图片一次 in 查询取代逐条 selectList（带图消息多时是 N+1）
+        List<Long> withAttachments = msgs.stream()
+                .filter(m -> "user".equalsIgnoreCase(m.getRole()) && m.getAttachmentsJson() != null)
+                .map(ChatMessage::getId)
+                .toList();
+        Map<Long, List<ChatImage>> imagesByMessage = new HashMap<>();
+        if (!withAttachments.isEmpty()) {
+            for (ChatImage img : chatImageMapper.selectList(new LambdaQueryWrapper<ChatImage>()
+                    .in(ChatImage::getMessageId, withAttachments))) {
+                imagesByMessage.computeIfAbsent(img.getMessageId(), k -> new ArrayList<>()).add(img);
+            }
+        }
         List<ChatTurn> turns = new ArrayList<>();
         for (int i = msgs.size() - 1; i >= 0; i--) {
             ChatMessage m = msgs.get(i);
             String content = m.getContent() == null ? "" : m.getContent();
             if ("user".equalsIgnoreCase(m.getRole()) && m.getAttachmentsJson() != null) {
-                List<ChatImage> imgs = chatImageMapper.selectList(new LambdaQueryWrapper<ChatImage>()
-                        .eq(ChatImage::getMessageId, m.getId()));
                 StringBuilder extra = new StringBuilder();
-                for (ChatImage img : imgs) {
+                for (ChatImage img : imagesByMessage.getOrDefault(m.getId(), List.of())) {
                     if (img.getFilename() != null) {
                         extra.append("\n[附图 ").append(img.getFilename()).append("]");
                     }

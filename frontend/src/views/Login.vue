@@ -1,56 +1,122 @@
 <template>
   <div class="auth">
-    <aside class="visual" aria-hidden="true">
-      <img src="/art/login.svg" alt="" />
-      <div class="veil">
-        <BrandMark tone="light" />
-        <p class="kicker">Kangshi</p>
-        <h1>康识问诊</h1>
-        <p class="lead">把 WHO 与国家卫健委的公开知识，讲成你听得懂的话。</p>
-      </div>
-    </aside>
-    <main class="panel">
-      <div class="inner">
-        <h2>欢迎回来</h2>
-        <p class="hint">演示账号 user / User123!　管理员 admin / Admin123!</p>
+    <div class="shell">
+      <!-- 左栏讲清"这是什么、能帮你做什么"。登录页是第一印象，
+           只摆一个表单会浪费这块版面；窄屏整块让位给表单。 -->
+      <aside class="pitch">
+        <div class="pitch-top">
+          <BrandMark />
+          <span>康识问诊</span>
+        </div>
+        <h2>看得懂的<br />健康解释</h2>
+        <ul class="points">
+          <li v-for="p in points" :key="p.title">
+            <span class="p-ico" v-html="ICONS[p.icon]"></span>
+            <span>
+              <b>{{ p.title }}</b>
+              <i>{{ p.desc }}</i>
+            </span>
+          </li>
+        </ul>
+        <p class="fine">内容仅供健康科普，不能替代执业医师的面诊。</p>
+      </aside>
+
+      <div class="box">
+        <BrandMark class="mobile-logo" />
+        <p class="eyebrow">{{ mode === 'login' ? '欢迎回来' : '开始使用' }}</p>
+        <h1>{{ mode === 'login' ? '登录' : '创建账号' }}</h1>
+        <p class="sub">
+          {{ mode === 'login' ? '登录以继续管理你和家人的健康档案。' : '注册后即可为家人建档、提问和解读报告。' }}
+        </p>
+
         <form class="form" @submit.prevent="onSubmit">
-          <label>
+          <label class="field">
             <span>用户名</span>
             <el-input v-model="form.username" size="large" autocomplete="username" />
           </label>
-          <label>
-            <span>密码</span>
-            <el-input v-model="form.password" type="password" show-password size="large" autocomplete="current-password" />
+          <label v-if="mode === 'register'" class="field">
+            <span>昵称（可选）</span>
+            <el-input v-model="form.nickname" size="large" placeholder="用于首页称呼" />
           </label>
-          <button class="copper-btn full" type="submit" :disabled="loading">{{ loading ? '正在进入…' : '进入系统' }}</button>
+          <label class="field">
+            <span>密码</span>
+            <el-input
+              v-model="form.password"
+              type="password"
+              show-password
+              size="large"
+              :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+            />
+          </label>
+          <button class="btn btn-primary btn-block go" type="submit" :disabled="loading">
+            {{ loading ? (mode === 'login' ? '正在进入…' : '创建中…') : mode === 'login' ? '登录' : '注册并进入' }}
+          </button>
         </form>
-        <p class="switch">还没有账号？<router-link to="/register">创建一个</router-link></p>
+
+        <p class="switch">
+          <template v-if="mode === 'login'">
+            还没有账号？<button type="button" class="link" @click="switchMode('register')">创建一个</button>
+          </template>
+          <template v-else>
+            已有账号？<button type="button" class="link" @click="switchMode('login')">返回登录</button>
+          </template>
+        </p>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { register } from '@/api/auth'
 import { useUserStore } from '@/stores/user'
 import BrandMark from '@/components/BrandMark.vue'
+import { ICONS, type IconName } from '@/utils/icons'
 
+// 登录/注册共用一个 apple.com 式页面，切换即原地换文案，不做两个路由两套排版
+const mode = ref<'login' | 'register'>('login')
 const store = useUserStore()
 const router = useRouter()
 const route = useRoute()
 const loading = ref(false)
-const form = reactive({ username: 'user', password: 'User123!' })
+const form = reactive({ username: '', nickname: '', password: '' })
+
+const points: { icon: IconName; title: string; desc: string }[] = [
+  { icon: 'chat', title: '有据可依的问答', desc: '答案标出引用来源，不是凭空生成' },
+  { icon: 'report', title: '化验单直接读图', desc: '拍一张照，指标高低逐项讲清楚' },
+  { icon: 'pulse', title: '一家人的趋势', desc: '给爸妈孩子各建一份档案，长期看变化' },
+]
+
+watch(
+  () => route.path,
+  (p) => {
+    mode.value = p.endsWith('register') ? 'register' : 'login'
+  },
+  { immediate: true },
+)
+
+function switchMode(m: 'login' | 'register') {
+  router.push(m === 'login' ? '/login' : '/register')
+}
 
 async function onSubmit() {
-  if (!form.username || !form.password) {
+  if (!form.username.trim() || !form.password) {
     ElMessage.warning('请输入用户名和密码')
     return
   }
   loading.value = true
   try {
-    await store.login(form.username, form.password)
+    if (mode.value === 'register') {
+      if (form.username.trim().length < 3 || form.password.length < 6) {
+        ElMessage.warning('用户名至少 3 位、密码至少 6 位')
+        return
+      }
+      await register({ username: form.username.trim(), password: form.password, nickname: form.nickname || undefined })
+      ElMessage.success('注册成功')
+    }
+    await store.login(form.username.trim(), form.password)
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/home'
     router.push(redirect)
   } finally {
@@ -61,103 +127,169 @@ async function onSubmit() {
 
 <style scoped>
 .auth {
-  min-height: 100%;
-  display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  background: var(--paper);
-}
-.visual {
-  position: relative;
-  overflow: hidden;
-  min-height: 100vh;
-}
-.visual img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: saturate(0.9);
-}
-.veil {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(16, 28, 24, 0.18), rgba(16, 28, 24, 0.62));
-  color: #f6f0e6;
-  padding: 48px 44px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-}
-.veil :deep(.mark) {
-  margin-bottom: 18px;
-}
-.kicker {
-  margin: 0 0 8px;
-  letter-spacing: 0.18em;
-  font-size: 12px;
-  color: #e0b08a;
-}
-h1,
-h2 {
-  font-family: var(--font-serif);
-  margin: 0 0 10px;
-}
-h1 {
-  font-size: 44px;
-  letter-spacing: 0.12em;
-}
-.lead {
-  margin: 0;
-  max-width: 360px;
-  line-height: 1.7;
-  color: rgba(246, 240, 230, 0.82);
-}
-.panel {
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 40px 24px;
+  padding: 32px 20px;
+  background: var(--paper);
 }
-.inner {
-  width: min(420px, 100%);
+
+.shell {
+  width: min(940px, 100%);
+  display: grid;
+  grid-template-columns: 1.02fr 1fr;
+  background: var(--card);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-shell);
+  box-shadow: var(--shadow-4);
+  overflow: hidden;
 }
-h2 {
-  font-size: 34px;
+
+/* 左栏用同色系更深一档，而不是突然跳到近黑 ——
+   浅色页面里插一块纯黑会像复制粘贴事故。 */
+.pitch {
+  padding: 40px 36px;
+  background: var(--sunk);
+  border-right: 1px solid var(--edge);
+  display: flex;
+  flex-direction: column;
 }
-.hint {
-  color: var(--ink-3);
-  font-size: 13px;
-  margin: 0 0 28px;
+
+.pitch-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 32px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+}
+
+.pitch h2 {
+  margin-bottom: 26px;
+  line-height: 1.2;
+}
+
+.points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 18px;
+}
+
+.points li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.p-ico {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--edge);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.p-ico :deep(svg) {
+  width: 17px;
+  height: 17px;
+  display: block;
+}
+
+.points b {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.points i {
+  display: block;
+  font-style: normal;
+  font-size: 12.5px;
   line-height: 1.6;
+  color: var(--ink-mute);
+  margin-top: 2px;
 }
+
+.fine {
+  margin-top: auto;
+  padding-top: 28px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--ink-faint);
+}
+
+.box {
+  padding: 44px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.mobile-logo {
+  display: none;
+  margin-bottom: 16px;
+}
+
+.box h1 {
+  margin: 6px 0 8px;
+}
+
+.sub {
+  margin-bottom: 26px;
+  color: var(--ink-mute);
+  line-height: 1.65;
+}
+
 .form {
   display: grid;
-  gap: 16px;
+  gap: 15px;
 }
-label span {
-  display: block;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  color: var(--ink-3);
-  margin-bottom: 6px;
-}
-.full {
-  width: 100%;
+
+.go {
   height: 46px;
-  margin-top: 8px;
+  margin-top: 6px;
 }
+
 .switch {
-  margin-top: 22px;
-  color: var(--ink-3);
-  font-size: 13px;
+  margin-top: 20px;
+  color: var(--ink-mute);
+  font-size: 14px;
 }
-@media (max-width: 860px) {
-  .auth {
+
+.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 880px) {
+  .shell {
     grid-template-columns: 1fr;
+    box-shadow: var(--shadow-3);
   }
-  .visual {
-    min-height: 240px;
+  .pitch {
+    display: none;
   }
-  h1 {
-    font-size: 32px;
+  .mobile-logo {
+    display: block;
+  }
+  .box {
+    padding: 32px 24px;
   }
 }
 </style>

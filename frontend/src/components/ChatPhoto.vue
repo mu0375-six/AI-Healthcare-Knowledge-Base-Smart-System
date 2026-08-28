@@ -7,8 +7,8 @@
       <div v-if="open" class="layer" @click.self="open = false">
         <img v-if="display" :src="display" :alt="alt || '图片'" />
         <div class="actions">
-          <button class="copper-btn" type="button" @click="save">保存到本地</button>
-          <button class="ghost-btn" type="button" @click="open = false">关闭</button>
+          <button class="btn btn-primary" type="button" @click="save">保存到本地</button>
+          <button class="btn btn-ghost" type="button" @click="open = false">关闭</button>
         </div>
       </div>
     </Teleport>
@@ -17,6 +17,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { authedFetch } from '@/utils/authedFetch'
 
 const props = defineProps<{ id?: number; src?: string; alt?: string }>()
 const display = ref(props.src || '')
@@ -30,10 +31,7 @@ async function load() {
   }
   if (!props.id) return
   revoke()
-  const token = localStorage.getItem('token') || ''
-  const resp = await fetch(`/api/chat/images/${props.id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  const resp = await authedFetch(`/api/chat/images/${props.id}`)
   if (!resp.ok) return
   const blob = await resp.blob()
   objectUrl = URL.createObjectURL(blob)

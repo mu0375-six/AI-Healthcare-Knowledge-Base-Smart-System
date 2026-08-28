@@ -36,8 +36,10 @@ spring:
         transcription: none
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 12MB
+      # 上传上限与 DocumentParser.MAX_BYTES 共用这一份配置（环境变量 APP_UPLOAD_MAX_BYTES），
+      # 避免两处各写一个数导致报错口径错位。请求限额比文件大 2MB 留出表单开销。
+      max-file-size: ${APP_UPLOAD_MAX_BYTES:10MB}
+      max-request-size: ${APP_UPLOAD_MAX_REQUEST_BYTES:12MB}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/healthkb?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
@@ -79,20 +81,27 @@ app:
   chat:
     image-dir: ${APP_CHAT_IMAGE_DIR:./data/chat-images}
   # 按用户维度的固定窗口限流。三个接口都会直连大模型，是唯一直接产生费用的地方。
-  # limit 设为 0 或负数表示该项不限流。
+  # 登录/注册是仅有的匿名写接口，按客户端 IP 独立限流防爆破。
+  # limit 设为 0 或负数表示该项不限流；窗口秒数可用 APP_RATE_LIMIT_WINDOW_SECONDS 统一覆盖。
   rate-limit:
+    auth:
+      limit: ${APP_RATE_LIMIT_AUTH:10}
+      window-seconds: ${APP_RATE_LIMIT_WINDOW_SECONDS:60}
     chat:
       limit: ${APP_RATE_LIMIT_CHAT:20}
-      window-seconds: 60
+      window-seconds: ${APP_RATE_LIMIT_WINDOW_SECONDS:60}
     upload:
       limit: ${APP_RATE_LIMIT_UPLOAD:5}
-      window-seconds: 60
+      window-seconds: ${APP_RATE_LIMIT_WINDOW_SECONDS:60}
     advice:
       limit: ${APP_RATE_LIMIT_ADVICE:10}
-      window-seconds: 60
+      window-seconds: ${APP_RATE_LIMIT_WINDOW_SECONDS:60}
   kb:
     allow-network: ${APP_KB_ALLOW_NETWORK:true}
     timeout-seconds: 18
+    # 启动时比对 DB 与向量库条数，一致则只回灌内存备份、不再重跑 embedding。
+    # 内容更新但条数恰好不变时它发现不了 —— 设为 true 可强制全量重建一次。
+    force-reindex: ${APP_KB_FORCE_REINDEX:false}
   # 医学知识向量化。DeepSeek 无 embedding 端点，需单独配一个 OpenAI 兼容的
   # embedding 服务（如硅基流动 BAAI/bge-m3、阿里百炼 text-embedding-v3）。
   # 不配则自动回退 EmbeddingService 的哈希向量（无语义能力，仅保证离线可演示）。

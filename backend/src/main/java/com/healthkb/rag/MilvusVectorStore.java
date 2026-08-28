@@ -153,8 +153,9 @@ public class MilvusVectorStore {
         if (!isReady() || client == null) {
             return;
         }
+        // 重试要短：flush 走启动/管理线程，长退避会把调用方挂住半分钟以上
         RuntimeException last = null;
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 3; i++) {
             try {
                 R<?> resp = client.flush(FlushParam.newBuilder().addCollectionName(collection).build());
                 if (resp.getStatus() == R.Status.Success.getCode()) {
@@ -165,7 +166,7 @@ public class MilvusVectorStore {
                 last = e;
             }
             try {
-                TimeUnit.MILLISECONDS.sleep(1500L * (i + 1));
+                TimeUnit.MILLISECONDS.sleep(400L);
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
                 return;
@@ -232,6 +233,62 @@ public class MilvusVectorStore {
         }
         QueryResultsWrapper wrapper = new QueryResultsWrapper(resp.getData());
         return (int) Math.min(wrapper.getRowCount(), Integer.MAX_VALUE);
+    }
+
+    /**
+     * 全量读回（含向量），供启动时把 Milvus 里已算好的向量回灌内存库 ——
+     * 替代「重跑一遍 embedding」的重建路径。Milvus 不可达或查询失败返回空表，
+     * 由调用方兜底为全量重建。
+     */
+    public List<StoredChunk> loadAll() {
+        if (!ensure()) {
+            return List.of();
+        }
+        R<QueryResults> resp = client.query(QueryParam.newBuilder()
+                .withCollectionName(collection)
+                .withExpr("chunk_id >= 0")
+                .withOutFields(List.of("chunk_id", "document_id", "embedding",
+                        "content", "title", "category", "source"))
+                .build());
+        if (resp.getStatus() != R.Status.Success.getCode()) {
+            log.warn("Milvus loadAll 失败: {}", resp.getMessage());
+            return List.of();
+        }
+        QueryResultsWrapper wrapper = new QueryResultsWrapper(resp.getData());
+        List<StoredChunk> out = new ArrayList<>();
+        for (QueryResultsWrapper.RowRecord row : wrapper.getRowRecords()) {
+            float[] vec;
+            try {
+                vec = toFloatArray(row.get("embedding"));
+            } catch (Exception e) {
+                log.warn("loadAll 解析向量失败，该行跳过: {}", e.toString());
+                continue;
+            }
+            out.add(new StoredChunk(
+                    asLong(row.get("chunk_id")),
+                    asLong(row.get("document_id")),
+                    vec,
+                    String.valueOf(row.get("content")),
+                    String.valueOf(row.get("title")),
+                    String.valueOf(row.get("category")),
+                    String.valueOf(row.get("source"))));
+        }
+        return out;
+    }
+
+    private static float[] toFloatArray(Object raw) {
+        if (raw instanceof float[] f) {
+            return f;
+        }
+        if (raw instanceof List<?> list) {
+            float[] v = new float[list.size()];
+            for (int i = 0; i < v.length; i++) {
+                Object e = list.get(i);
+                v[i] = e instanceof Number num ? num.floatValue() : (float) Double.parseDouble(String.valueOf(e));
+            }
+            return v;
+        }
+        throw new IllegalStateException("不支持的向量数据类型: " + (raw == null ? "null" : raw.getClass().getName()));
     }
 
     public void clear() {

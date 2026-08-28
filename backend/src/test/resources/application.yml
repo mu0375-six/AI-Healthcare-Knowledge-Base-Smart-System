@@ -56,6 +56,12 @@ app:
     chunk-size: 600
     chunk-overlap: 80
     embedding-dim: 256
+  rate-limit:
+    # 默认关掉登录限流：多个测试共享同一 Spring 上下文，共用一个进程内计数器，
+    # 否则各自几次登录就凑满配额互相干扰。AuthApiRateLimitTest 自己覆盖为小限额。
+    auth:
+      limit: 0
+      window-seconds: 60
   milvus:
     enabled: false
     host: 127.0.0.1

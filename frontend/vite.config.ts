@@ -2,6 +2,9 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
+// 后端地址可用 VITE_PROXY_TARGET 覆盖（如本机 8080 被占用时指向远程）
+const proxyTarget = process.env.VITE_PROXY_TARGET || 'http://localhost:8080'
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -13,8 +16,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: proxyTarget,
         changeOrigin: true,
+        // timeout: 0 是有意的：SSE 流式回答要求代理永不主动断开
         timeout: 0,
         proxyTimeout: 0,
         configure: (proxy) => {

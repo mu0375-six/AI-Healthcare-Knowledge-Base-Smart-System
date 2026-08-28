@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it'
+import DOMPurify from 'dompurify'
 import katex from 'katex'
 
 const md = new MarkdownIt({
@@ -25,56 +26,35 @@ function escapeReg(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/** HTML 实体模式：&lt; &amp; &#39; 等。术语替换必须绕开它们，否则会把实体内部字符改坏。 */
+const ENTITY = /&[a-zA-Z#0-9]+;/
+
+function highlightTerms(html: string, terms: string[]): string {
+  const sorted = [...terms].filter((t) => t && t.length >= 2).sort((a, b) => b.length - a.length)
+  if (!sorted.length) return html
+  // 单轮替换：多轮顺序替换会把上一轮刚插进去的 <span class="med-term"> 标签
+  // 本身卷进下一轮匹配。合并为一条 alternation（长词在前保证优先级）一次完成。
+  const pattern = new RegExp(`(${sorted.map(escapeReg).join('|')})`, 'g')
+  return html.replace(/(<[^>]+>)|([^<]+)/g, (_full, tag: string, txt: string) => {
+    if (tag) return tag
+    // 文本段再按实体切开，只在非实体片段里替换，防止「ALT」命中 &lt; 里的 lt
+    return txt
+      .split(new RegExp(`(${ENTITY.source})`, 'g'))
+      .map((piece) => (ENTITY.test(piece) ? piece : piece.replace(pattern, '<span class="med-term">$&</span>')))
+      .join('')
+  })
+}
+
 export function renderMarkdown(text: string, terms: string[] = []): string {
   const html = md.render(text || '')
   const withMath = html.replace(/(<[^>]+>)|([^<]+)/g, (_full, tag: string, txt: string) => {
     if (tag) return tag
     return applyMath(txt)
   })
-  if (!terms.length) return withMath
-  const sorted = [...terms].filter((t) => t && t.length >= 2).sort((a, b) => b.length - a.length)
-  return withMath.replace(/(<[^>]+>)|([^<]+)/g, (_full, tag: string, txt: string) => {
-    if (tag) return tag
-    let s = txt
-    for (const term of sorted) {
-      s = s.replace(new RegExp(escapeReg(term), 'g'), '<span class="med-term">$&</span>')
-    }
-    return s
-  })
-}
-
-const CITE_STOP = new Set([
-  '最近', '有点', '并且', '怎么', '什么', '哪些', '一下', '还是', '比较', '感觉',
-  '注意', '事项', '这个', '一个', '可以', '需要', '如果', '或者', '以及', '进行',
-  '出现', '相关', '问题', '情况', '时候', '之后', '之前', '我们', '自己', '怎么办',
-  '注意事项', '请问', '想问', '咨询', '了解', '是否', '怎样', '为何',
-  '因为', '所以', '但是', '然后', '现在', '今天', '昨天', '有些', '一点',
-])
-
-export function questionTerms(query: string): string[] {
-  if (!query) return []
-  let remaining = query.replace(/[^\u4e00-\u9fffA-Za-z0-9]+/g, ' ')
-  for (const s of CITE_STOP) remaining = remaining.split(s).join(' ')
-  const terms = new Set<string>()
-  for (const part of remaining.split(/\s+/)) {
-    if (part.length < 2 || CITE_STOP.has(part)) continue
-    terms.add(part)
-    if (part.length >= 4) {
-      for (let n = 2; n <= 3; n++) {
-        for (let i = 0; i + n <= part.length; i++) terms.add(part.slice(i, i + n))
-      }
-    }
-  }
-  return [...terms]
-}
-
-export function citationFitsQuestion(
-  citation: { title?: string; snippet?: string },
-  question: string,
-): boolean {
-  const blob = `${citation.title || ''}\n${citation.snippet || ''}`
-  if (!blob.trim()) return false
-  return questionTerms(question).some((t) => t.length >= 2 && blob.includes(t))
+  const highlighted = terms.length ? highlightTerms(withMath, terms) : withMath
+  // 纵深防御：当前 html:false + KaTeX 默认配置已挡住注入，这一层防的是
+  // 将来有人放开 html 选项或新增直出 HTML 的插件时把风险兜住。
+  return DOMPurify.sanitize(highlighted, { ADD_ATTR: ['target'] })
 }
 
 export function parseAttachments(raw?: string | null): { id: number; filename: string; mimeType?: string }[] {
@@ -86,5 +66,3 @@ export function parseAttachments(raw?: string | null): { id: number; filename: s
     return []
   }
 }
-
-

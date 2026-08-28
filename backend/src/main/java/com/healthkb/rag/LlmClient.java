@@ -86,6 +86,52 @@ public class LlmClient {
         return out;
     }
 
+    /**
+     * 报告图片 → 结构化文本（拍照识别化验单）。
+     * 走同一多模态 ChatClient：不引入额外的 OCR 引擎/模型包，离线缺省时由调用方降级。
+     *
+     * @throws IllegalStateException 未配置模型 / 模型不支持图像 / 识别结果为空时抛出，由调用方转友好提示
+     */
+    public String extractReportText(byte[] imageBytes, String mimeType) {
+        if (!isConfigured()) {
+            throw new IllegalStateException("未配置多模态模型（APP_LLM_BASE_URL / APP_LLM_API_KEY）");
+        }
+        if (!modelSupportsVision()) {
+            throw new IllegalStateException("当前模型「" + model + "」不支持图像输入");
+        }
+        List<Media> media = toMedia(List.of(new ImageInput(
+                Base64.getEncoder().encodeToString(imageBytes), mimeType)));
+        if (media.isEmpty()) {
+            throw new IllegalStateException("图片字节解析失败");
+        }
+        UserMessage message = UserMessage.builder()
+                .text("""
+                        你是体检报告的图片转写助手。请把图片中化验单/体检报告的文字**逐行转写**成纯文本：
+                        - 保留指标名、数值、单位、参考范围与箭头标记，按原文顺序一行一条；
+                        - 忽略医院抬头、水印、签字等与指标无关的内容；
+                        - 看不清或不确定的内容标 [不确定]；
+                        - 不要解读、不要总结、不要加任何解释性文字，只输出转写结果。
+                        """)
+                .media(media)
+                .build();
+        String text;
+        try {
+            text = chatClientProvider.getObject().prompt()
+                    .messages(List.of(
+                            new SystemMessage("你是医学文档图片转写工具。只输出图片上文字的转写结果，禁止解读、总结或输出转写以外的任何内容。"),
+                            message))
+                    .call()
+                    .content();
+        } catch (Exception e) {
+            log.warn("报告图片识别失败: {}", e.toString());
+            throw new IllegalStateException("图片识别失败，请重试或直接上传文本报告");
+        }
+        if (text == null || text.isBlank()) {
+            throw new IllegalStateException("图片识别结果为空");
+        }
+        return text.trim();
+    }
+
     private void streamRemote(String question, List<ScoredChunk> chunks, List<ChatTurn> history,
                               String extraContext, List<ImageInput> images, AnswerSink sink) {
         ChatClient chatClient = chatClientProvider.getObject();

@@ -2,6 +2,7 @@ package com.healthkb.controller;
 
 import com.healthkb.common.ApiResponse;
 import com.healthkb.dto.KnowledgeDtos;
+import com.healthkb.dto.PageResult;
 import com.healthkb.entity.KbDocument;
 import com.healthkb.service.KnowledgeService;
 import com.healthkb.service.OfficialKnowledgeService;
@@ -30,8 +31,11 @@ public class KnowledgeController {
     private final OfficialKnowledgeService officialKnowledgeService;
 
     @GetMapping("/admin/knowledge")
-    public ApiResponse<List<KbDocument>> list() {
-        return ApiResponse.ok(knowledgeService.listDocuments());
+    public ApiResponse<PageResult<KbDocument>> list(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        return ApiResponse.ok(knowledgeService.listDocuments(
+                PageResult.normalizePage(page), PageResult.clampSize(size, 20)));
     }
 
     @PostMapping("/admin/knowledge/upload")
@@ -80,6 +84,13 @@ public class KnowledgeController {
     public ApiResponse<Map<String, Object>> reindex() {
         int n = knowledgeService.reindex();
         return ApiResponse.ok(Map.of("count", n, "store", knowledgeService.vectorStatus()));
+    }
+
+    /** 首页「医学小知识」卡片，只读，普通用户可访问。 */
+    @GetMapping("/knowledge/highlights")
+    public ApiResponse<List<Map<String, Object>>> highlights(
+            @RequestParam(value = "limit", defaultValue = "6") int limit) {
+        return ApiResponse.ok(knowledgeService.highlights(limit));
     }
 
     @GetMapping("/knowledge/terms")

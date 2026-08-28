@@ -1,6 +1,7 @@
 package com.healthkb.service;
 
 import com.healthkb.common.AppException;
+import com.healthkb.common.FileMagic;
 import com.healthkb.entity.ChatImage;
 import com.healthkb.mapper.ChatImageMapper;
 import com.healthkb.security.SecurityUtils;
@@ -54,12 +55,25 @@ public class ChatImageService {
         if (!ALLOWED.contains(ext)) {
             throw AppException.badRequest("只支持 png / jpg / jpeg / webp / gif");
         }
-        String mime = mimeOf(ext, file.getContentType());
+        byte[] raw;
+        try {
+            raw = file.getBytes();
+        } catch (IOException e) {
+            throw AppException.badRequest("图片读取失败，请重试");
+        }
+        // 扩展名可被随手改，签名不会；伪装成图片的文件不能入库再原样回显给浏览器
+        FileMagic type = FileMagic.detect(raw);
+        if (!FileMagic.extMatches(ext, type)) {
+            throw AppException.badRequest("图片内容与扩展名不符，请勿修改后缀后上传");
+        }
+        String mime = FileMagic.mimeOf(type);
+        if (mime == null) {
+            throw AppException.badRequest("无法识别的图片格式");
+        }
         String stored = UUID.randomUUID().toString().replace("-", "") + "." + ext;
         Path dir = Path.of(imageDir);
         try {
             Files.createDirectories(dir);
-            byte[] raw = file.getBytes();
             byte[] toWrite = maybeDownscale(raw, ext);
             Files.write(dir.resolve(stored), toWrite);
             ChatImage img = new ChatImage();
@@ -204,14 +218,5 @@ public class ChatImageService {
     private static String extOf(String filename) {
         int i = filename.lastIndexOf('.');
         return i < 0 ? "" : filename.substring(i + 1).toLowerCase(Locale.ROOT);
-    }
-
-    private static String mimeOf(String ext, String hinted) {
-        return switch (ext) {
-            case "png" -> "image/png";
-            case "gif" -> "image/gif";
-            case "webp" -> "image/webp";
-            default -> hinted != null && hinted.startsWith("image/") ? hinted : "image/jpeg";
-        };
     }
 }
