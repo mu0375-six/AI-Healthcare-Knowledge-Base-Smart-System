@@ -3,8 +3,8 @@
     <PageHeader kicker="Knowledge" title="知识库" desc="优先接入世界卫生组织、国家卫生健康委等权威公开文本，也可继续上传或录入。" />
 
     <section class="panel core-pad sync">
-      <div>
-        <h3>权威源同步</h3>
+      <div class="sync-copy">
+        <div class="section-head"><h3>权威源同步</h3></div>
         <p>从 WHO 实况报道、国家卫健委公开文件拉取；网络不通时使用已核对的官方文本快照。</p>
       </div>
       <button class="btn btn-primary" type="button" :disabled="syncing" @click="doSync">
@@ -15,7 +15,7 @@
     <section class="panel core-pad block">
       <el-tabs>
         <el-tab-pane label="上传文件">
-          <el-form label-width="80px">
+          <el-form label-position="top">
             <el-form-item label="文件">
               <el-upload :auto-upload="false" :limit="1" :on-change="onFile" accept=".pdf,.doc,.docx,.txt">
                 <el-button>选择 PDF / Word / txt</el-button>
@@ -23,7 +23,7 @@
             </el-form-item>
             <el-form-item label="标题"><el-input v-model="upload.title" /></el-form-item>
             <el-form-item label="分类">
-              <el-select v-model="upload.category">
+              <el-select v-model="upload.category" style="width: 100%">
                 <el-option label="疾病指南" value="疾病指南" />
                 <el-option label="药品说明" value="药品说明" />
                 <el-option label="科室导诊" value="科室导诊" />
@@ -34,10 +34,10 @@
           </el-form>
         </el-tab-pane>
         <el-tab-pane label="录入文本">
-          <el-form label-width="80px">
+          <el-form label-position="top">
             <el-form-item label="标题"><el-input v-model="text.title" /></el-form-item>
             <el-form-item label="分类">
-              <el-select v-model="text.category">
+              <el-select v-model="text.category" style="width: 100%">
                 <el-option label="疾病指南" value="疾病指南" />
                 <el-option label="药品说明" value="药品说明" />
                 <el-option label="科室导诊" value="科室导诊" />
@@ -52,18 +52,30 @@
     </section>
 
     <section class="panel core-pad block">
-      <h3>已入库文档</h3>
+      <div class="section-head"><h3>已入库文档</h3></div>
       <el-table :data="docs" empty-text="暂无文档">
         <el-table-column prop="title" label="标题" min-width="160" />
         <el-table-column prop="publisher" label="发布机构" width="220" />
         <el-table-column prop="category" label="分类" width="110" />
         <el-table-column label="原文" min-width="220">
           <template #default="{ row }">
-            <a v-if="row.sourceUrl" :href="row.sourceUrl" target="_blank" rel="noopener">{{ row.sourceUrl }}</a>
+            <a
+              v-if="row.sourceUrl"
+              class="source-link"
+              :href="row.sourceUrl"
+              :title="row.sourceUrl"
+              target="_blank"
+              rel="noopener"
+            >
+              <span class="source-domain">{{ sourceDomain(row.sourceUrl) }}</span>
+              <span class="source-action">查看原文<span v-html="ICONS.external"></span></span>
+            </a>
             <span v-else>{{ row.source }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="时间" width="180" />
+        <el-table-column label="时间" width="160">
+          <template #default="{ row }">{{ formatWhen(row.createdAt) }}</template>
+        </el-table-column>
         <el-table-column label="" width="90">
           <template #default="{ row }">
             <el-button text type="danger" @click="remove(row.id)">删除</el-button>
@@ -89,6 +101,8 @@ import type { UploadFile } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { addKnowledgeText, deleteKnowledge, listKnowledge, syncOfficialKnowledge, uploadKnowledge } from '@/api/knowledge'
 import type { KbDocument } from '@/api/types'
+import { formatWhen } from '@/utils/format'
+import { ICONS } from '@/utils/icons'
 import PageHeader from '@/components/PageHeader.vue'
 
 const docs = ref<KbDocument[]>([])
@@ -159,6 +173,14 @@ async function remove(id: number) {
   await deleteKnowledge(id)
   await load()
 }
+
+function sourceDomain(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return '原文链接'
+  }
+}
 </script>
 
 <style scoped>
@@ -166,12 +188,13 @@ async function remove(id: number) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
 }
-.sync h3,
-.block h3 {
-  margin: 0 0 6px;
-  font-size: 20px;
+.sync-copy {
+  min-width: 0;
+}
+.sync .section-head {
+  margin-bottom: var(--space-2);
 }
 .sync p {
   margin: 0;
@@ -179,11 +202,41 @@ async function remove(id: number) {
   font-size: 13px;
 }
 .block {
-  margin-top: 14px;
+  margin-top: var(--space-4);
 }
 .pager {
-  margin-top: 10px;
+  margin-top: var(--space-3);
   justify-content: center;
+}
+
+.source-link {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+  max-width: 100%;
+  color: var(--ink-mute);
+}
+
+.source-domain {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.source-action :deep(svg) {
+  width: 13px;
+  height: 13px;
 }
 
 @media (max-width: 720px) {

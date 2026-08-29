@@ -26,32 +26,44 @@
         <em>{{ store.dim || 256 }}</em>
       </div>
     </div>
-    <p class="detail">{{ store.detail }}{{ store.collection ? ' · 集合 ' + store.collection : '' }}</p>
+    <div v-if="statusCopy.summary" class="status-detail">
+      <p>{{ statusCopy.summary }}{{ store.collection ? ' · 集合 ' + store.collection : '' }}</p>
+      <details v-if="statusCopy.technical">
+        <summary>查看技术详情</summary>
+        <pre>{{ statusCopy.technical }}</pre>
+      </details>
+    </div>
 
-    <section class="shell">
+    <Shell>
       <form class="ask" @submit.prevent="run">
-        <input v-model="q" placeholder="例如：二甲双胍注意事项 / 高血压饮食" />
+        <input v-model="q" aria-label="向量检索内容" placeholder="例如：二甲双胍注意事项 / 高血压饮食" />
         <button class="btn btn-primary" type="submit" :disabled="loading || !q.trim()">{{ loading ? '检索中…' : '检索' }}</button>
       </form>
       <div class="chips">
-        <button v-for="s in suggests" :key="s" type="button" @click="q = s; run()">{{ s }}</button>
+        <button v-for="s in suggests" :key="s" class="chip-btn" type="button" @click="q = s; run()">{{ s }}</button>
       </div>
       <p v-if="inspect" class="meta">耗时 {{ inspect.elapsedMs }} ms · ANN 召回 {{ inspect.rawHits.length }} · 词项过滤后 {{ inspect.keptHits.length }}</p>
+    </Shell>
+
+    <section v-if="!inspect" class="panel empty vector-empty">
+      <span v-html="ICONS.dots"></span>
+      <h3>试一次知识召回</h3>
+      <p>输入症状或药名，看看知识库会召回什么。</p>
     </section>
 
     <div v-if="inspect" class="grid">
-      <section class="shell">
-        <h3>相似度 Top-K</h3>
+      <Shell>
+        <template #head><h3>相似度 Top-K</h3></template>
         <v-chart v-if="barOption" :option="barOption" autoresize style="height: 280px" />
-      </section>
-      <section class="shell">
-        <h3>分类分布</h3>
+      </Shell>
+      <Shell>
+        <template #head><h3>分类分布</h3></template>
         <v-chart v-if="pieOption" :option="pieOption" autoresize style="height: 280px" />
-      </section>
+      </Shell>
     </div>
 
     <section v-if="inspect" class="panel core-pad block">
-      <h3>召回切片</h3>
+      <div class="section-head"><h3>召回切片</h3></div>
       <p class="hint">ANN 是向量近邻；词项命中表示标题/正文里出现了问题里的医学词。问答最终只用词项命中的条目。</p>
       <article v-for="h in inspect.rawHits" :key="h.chunkId" class="hit" :class="{ keep: h.lexicalHit }">
         <div class="hit-top">
@@ -73,7 +85,9 @@ import { inspectVectors, reindexVectors, vectorStatus, type VectorInspect, type 
 import { useUserStore } from '@/stores/user'
 import { CHART_COLORS, chartTheme } from '@/utils/charts'
 import { SUGGESTIONS } from '@/utils/suggestions'
+import { ICONS } from '@/utils/icons'
 import PageHeader from '@/components/PageHeader.vue'
+import Shell from '@/components/Shell.vue'
 
 const user = useUserStore()
 const store = ref<VectorStoreInfo>({ backend: 'memory', connected: false, count: 0, dim: 256, collection: '', detail: '' })
@@ -87,6 +101,14 @@ const loading = ref(false)
 const reindexing = ref(false)
 const inspect = ref<VectorInspect | null>(null)
 const suggests = SUGGESTIONS.vectors
+const statusCopy = computed(() => {
+  const detail = store.value.detail?.trim() || ''
+  const marker = '原因：'
+  const index = detail.indexOf(marker)
+  if (index < 0) return { summary: detail, technical: '' }
+  const summary = detail.slice(0, index).replace(/[；。\s]+$/, '') + '。'
+  return { summary, technical: detail.slice(index + marker.length).trim() }
+})
 
 onMounted(async () => {
   store.value = (await vectorStatus()).data
@@ -176,12 +198,12 @@ function onThemeChange() {
 <style scoped>
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-bottom: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 .stat {
-  padding: 14px;
+  padding: var(--space-4);
 }
 .stat span {
   color: var(--ink-faint);
@@ -197,35 +219,56 @@ function onThemeChange() {
 .stat em.ok {
   color: var(--flag-normal);
 }
-.detail {
+.status-detail {
+  display: grid;
+  gap: var(--space-2);
   color: var(--ink-faint);
   font-size: 13px;
-  margin: 0 0 16px;
+  margin: 0 0 var(--space-4);
+}
+.status-detail summary {
+  width: max-content;
+  color: var(--ink-mute);
+  cursor: pointer;
+}
+.status-detail pre {
+  max-height: 148px;
+  overflow: auto;
+  padding: var(--space-3);
+  border-radius: var(--r-chip);
+  background: var(--sunk);
+  color: var(--ink-mute);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .ask {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .ask input {
   flex: 1;
+  min-width: 0;
   border: 1px solid var(--edge-strong);
-  border-radius: 999px;
-  padding: 10px 16px;
-  background: var(--field);
+  border-radius: var(--r-pill);
+  padding: 10px var(--space-4);
+  background: var(--sunk);
+  color: var(--ink);
   font-size: 14px;
+  outline: none;
+  transition: border-color 0.18s var(--ease-soft), box-shadow 0.3s var(--ease);
+}
+.ask input:focus {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-wash);
 }
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-.chips button {
-  border: 1px solid var(--edge-strong);
-  background: var(--field);
-  border-radius: 999px;
-  padding: 5px 12px;
-  cursor: pointer;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
 }
 .meta,
 .hint {
@@ -235,19 +278,18 @@ function onThemeChange() {
 .grid {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
-  gap: 14px;
-  margin-top: 14px;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
 }
 .block {
-  margin-top: 14px;
+  margin-top: var(--space-4);
 }
-h3 {
-  margin: 0 0 10px;
-  font-size: 18px;
+.vector-empty {
+  margin-top: var(--space-4);
 }
 .hit {
   border-top: 1px solid var(--edge);
-  padding: 12px 0;
+  padding: var(--space-3) 0;
 }
 .hit.keep {
   background: linear-gradient(90deg, var(--accent-wash), transparent);
@@ -255,7 +297,7 @@ h3 {
 .hit-top {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .hit p {
   margin: 6px 0 4px;
@@ -266,9 +308,18 @@ h3 {
   color: var(--ink-faint);
 }
 @media (max-width: 900px) {
-  .stats,
   .grid {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .ask {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>
