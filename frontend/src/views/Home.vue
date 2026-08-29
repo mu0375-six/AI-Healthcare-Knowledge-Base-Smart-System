@@ -8,7 +8,7 @@
     <!-- Hero 是一句论断，不是一个问句。
          论断的依据来自这个产品世界里最核心的器物：化验单的参考线。
          有指标越线时，标题直接说出越了几项；没有时，说出"都在线内"。 -->
-    <header class="hero" v-reveal>
+    <header class="hero">
       <span class="eyebrow">
         <span v-html="ICONS.pulse"></span>
         {{ today }}
@@ -50,7 +50,7 @@
 
 <!-- 快捷入口：一整行圆形图标，横向铺满。
          这是这个产品能做的全部动作，摆出来比藏进菜单强。 -->
-    <nav class="quick" aria-label="快捷入口" v-reveal="40">
+    <nav class="quick" aria-label="快捷入口">
       <button v-for="a in QUICK" :key="a.label" class="q" type="button" @click="router.push(a.to)">
         <span class="q-ico" :style="{ background: a.bg, color: a.fg }" v-html="ICONS[a.icon]"></span>
         <span>{{ a.label }}</span>
@@ -59,8 +59,8 @@
 
     <div class="bento">
       <!-- 提问：主行为，占七列 -->
-      <section class="shell b7" v-reveal="60">
-        <div class="core core-pad ask">
+      <Shell class="b7">
+        <div class="ask">
           <div class="section-head">
             <h3>说说哪里不舒服</h3>
             <span class="count">回答会标出知识库出处</span>
@@ -72,14 +72,14 @@
             </button>
           </form>
           <div class="seeds">
-            <button v-for="s in suggests" :key="s" type="button" @click="ask(s)">{{ s }}</button>
+            <button v-for="s in suggests" :key="s" class="chip-btn" type="button" @click="ask(s)">{{ s }}</button>
           </div>
         </div>
-      </section>
+      </Shell>
 
       <!-- 最该看的那一项：越线最远的指标，大号标尺 -->
-      <section class="shell b5" v-reveal="120">
-        <div class="core core-pad focus">
+      <Shell class="b5">
+        <div class="focus">
           <div class="section-head">
             <h3>{{ headline ? '最该看的一项' : '还没有指标' }}</h3>
             <router-link v-if="headline" class="spacer btn btn-quiet btn-sm" to="/health">全部</router-link>
@@ -104,7 +104,7 @@
             记一次血压或血糖，或者传一张化验单，这里会显示离参考线最远的那一项。
           </p>
         </div>
-      </section>
+      </Shell>
 
       <!-- 其余越线项 -->
       <section v-if="rest.length" class="b12" v-reveal="60">
@@ -135,8 +135,8 @@
       </section>
 
       <!-- 趋势：八列，图表最吃宽度 -->
-      <section v-if="series.length" class="shell b12" v-reveal>
-        <div class="core core-pad">
+      <Shell v-if="series.length" class="b12" v-reveal>
+        <div>
           <div class="section-head">
             <h3>这些天的走势</h3>
             <router-link class="spacer btn btn-quiet btn-sm" to="/health">全部指标</router-link>
@@ -157,11 +157,11 @@
             </button>
           </div>
         </div>
-      </section>
+      </Shell>
 
-      <!-- 家人：四列 -->
-      <section class="shell" :class="'b4'" v-reveal="80">
-        <div class="core core-pad">
+      <!-- 家人与近期各占半行，内容按自身高度落位。 -->
+      <Shell class="b6" v-reveal="80">
+        <div>
           <div class="section-head">
             <h3>家人</h3>
             <span v-if="overview.profiles.length" class="count num">{{ overview.profiles.length }}</span>
@@ -186,54 +186,53 @@
             </button>
           </div>
         </div>
-      </section>
+      </Shell>
 
-      <!-- 近期：两个六列 -->
-      <section class="shell b4" v-reveal="60">
-        <div class="core core-pad">
+      <Shell v-if="hasRecent" class="b6" v-reveal="120">
+        <div class="recent">
           <div class="section-head">
-            <h3>问过的</h3>
-            <router-link class="spacer btn btn-quiet btn-sm" to="/chat">全部</router-link>
+            <h3>最近</h3>
           </div>
-          <p v-if="!overview.recentSessions.length" class="quiet">还没有问过什么。</p>
-          <button
-            v-for="s in overview.recentSessions"
-            :key="s.id"
-            class="line"
-            type="button"
-            @click="router.push('/chat?sid=' + s.id)"
-          >
-            <b>{{ s.title }}</b>
-            <time>{{ formatWhen(s.updatedAt) }}</time>
-          </button>
+          <section v-if="overview.recentSessions.length" class="recent-group">
+            <div class="recent-label">
+              <h4>问过的</h4>
+              <router-link class="btn btn-quiet btn-sm" to="/chat">全部</router-link>
+            </div>
+            <button
+              v-for="s in overview.recentSessions"
+              :key="s.id"
+              class="line"
+              type="button"
+              @click="router.push('/chat?sid=' + s.id)"
+            >
+              <b>{{ s.title }}</b>
+              <time>{{ formatWhen(s.updatedAt) }}</time>
+            </button>
+          </section>
+          <section v-if="overview.recentReports.length" class="recent-group">
+            <div class="recent-label">
+              <h4>读过的报告</h4>
+              <router-link class="btn btn-quiet btn-sm" to="/health?tab=reports">全部</router-link>
+            </div>
+            <button
+              v-for="r in overview.recentReports"
+              :key="r.id"
+              class="line"
+              type="button"
+              @click="router.push('/reports/' + r.id)"
+            >
+              <b>{{ r.filename }}</b>
+              <time>{{ formatWhen(r.createdAt) }}</time>
+            </button>
+          </section>
         </div>
-      </section>
-
-      <section class="shell b4" v-reveal="120">
-        <div class="core core-pad">
-          <div class="section-head">
-            <h3>读过的报告</h3>
-            <router-link class="spacer btn btn-quiet btn-sm" to="/health?tab=reports">全部</router-link>
-          </div>
-          <p v-if="!overview.recentReports.length" class="quiet">还没有读过报告。</p>
-          <button
-            v-for="r in overview.recentReports"
-            :key="r.id"
-            class="line"
-            type="button"
-            @click="router.push('/reports/' + r.id)"
-          >
-            <b>{{ r.filename }}</b>
-            <time>{{ formatWhen(r.createdAt) }}</time>
-          </button>
-        </div>
-      </section>
+      </Shell>
     </div>
     </div>
 
-    <aside class="news" aria-label="健康新闻" v-reveal="80">
+    <aside class="news" aria-label="健康新闻">
       <div class="news-head">
-        <h3><span class="news-ico" v-html="ICONS.spark"></span>健康新闻</h3>
+        <h2 class="news-title"><span class="news-ico" v-html="ICONS.spark"></span>健康新闻</h2>
         <span class="news-src">世界卫生组织 · 中文</span>
       </div>
       <div v-if="news.length" class="news-list">
@@ -283,6 +282,7 @@ import { ICONS } from '@/utils/icons'
 import LabStrip from '@/components/LabStrip.vue'
 import NewsPhoto from '@/components/NewsPhoto.vue'
 import MedicalDisclaimer from '@/components/MedicalDisclaimer.vue'
+import Shell from '@/components/Shell.vue'
 
 ensureCharts()
 
@@ -292,13 +292,9 @@ const news = ref<NewsListItem[]>([])
 
 /** 快捷入口。底色用强调色与数据色的极淡washes，不引第二个品牌色。 */
 const QUICK = [
-  { to: '/chat', label: '问诊', icon: 'chat', bg: 'var(--accent-wash)', fg: 'var(--accent)' },
   { to: '/reports/upload', label: '读化验单', icon: 'camera', bg: 'var(--flag-low-wash)', fg: 'var(--flag-low)' },
-  { to: '/health', label: '家庭档案', icon: 'file', bg: 'var(--flag-normal-wash)', fg: 'var(--flag-normal)' },
   { to: '/health?tab=metrics', label: '记指标', icon: 'pulse', bg: 'var(--flag-high-wash)', fg: 'var(--flag-high)' },
-  { to: '/triage', label: '科室导诊', icon: 'compass', bg: 'var(--accent-wash)', fg: 'var(--accent)' },
   { to: '/health?tab=advice', label: '健康建议', icon: 'heart', bg: 'var(--flag-normal-wash)', fg: 'var(--flag-normal)' },
-  { to: '/favorites', label: '我的收藏', icon: 'star', bg: 'var(--flag-low-wash)', fg: 'var(--flag-low)' },
   { to: '/health?tab=history', label: '病史', icon: 'book2', bg: 'var(--accent-wash)', fg: 'var(--accent)' },
 ] as const
 const loading = ref(true)
@@ -325,6 +321,7 @@ const suggests = SUGGESTIONS.home
 const series = computed(() => overview.series.filter((sr) => (sr.points?.length || 0) >= 2))
 const alerts = computed(() => overview.alerts)
 const hasAnyData = computed(() => overview.metricCount > 0 || overview.reportCount > 0)
+const hasRecent = computed(() => overview.recentSessions.length > 0 || overview.recentReports.length > 0)
 
 const today = computed(() => {
   const d = new Date()
@@ -431,7 +428,7 @@ function sparkOption(sr: MetricSeries) {
 <style scoped>
 .page {
   display: grid;
-  gap: 26px;
+  gap: var(--space-6);
   /* 首页是主栏 + 新闻栏的宽两栏，上限放宽到 1760px：
      1920 屏（内容区约 1680px）能整幅铺满，不剩右侧死角白。 */
   max-width: 1760px;
@@ -439,7 +436,8 @@ function sparkOption(sr: MetricSeries) {
 
 /* ---- Hero ---- */
 .hero {
-  padding: 8px 0 4px;
+  padding: var(--space-2) 0 var(--space-1);
+  margin-bottom: var(--space-7);
 }
 
 /* 中文标题的宽度必须用 em 而不是 ch ——
@@ -447,9 +445,10 @@ function sparkOption(sr: MetricSeries) {
    22ch 实际只放得下 11 个汉字，标题会被劈在词中间。
    7.4em ≈ 每行 7 个汉字，两行成句。 */
 .hero h1 {
-  margin: 16px 0 0;
-  max-width: 7.4em;
-  text-wrap: nowrap;
+  margin: var(--space-4) 0 0;
+  max-width: min(7.4em, 100%);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* 论断的后半句用斜体衬线 —— Fraunces 的 wonk 轴在斜体里最有性格，
@@ -460,7 +459,7 @@ function sparkOption(sr: MetricSeries) {
 }
 
 .thesis {
-  margin-top: 18px;
+  margin-top: var(--space-5);
   max-width: 24em;
   color: var(--ink-soft);
   font-size: 16px;
@@ -470,30 +469,25 @@ function sparkOption(sr: MetricSeries) {
 .hero-acts {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 26px;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
 }
 
 /* ---- 快捷入口 ---- */
 .quick {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  padding: 2px 2px 6px;
-  scrollbar-width: none;
-}
-
-.quick::-webkit-scrollbar {
-  display: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-1);
+  margin-bottom: var(--space-5);
 }
 
 .q {
-  flex: 1 0 auto;
-  min-width: 84px;
+  min-width: 0;
   display: grid;
   justify-items: center;
-  gap: 8px;
-  padding: 12px 8px 10px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2);
   border: 0;
   border-radius: var(--r-card);
   background: none;
@@ -519,7 +513,7 @@ function sparkOption(sr: MetricSeries) {
   place-items: center;
   width: 46px;
   height: 46px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
 }
 
 .q-ico :deep(svg) {
@@ -532,28 +526,28 @@ function sparkOption(sr: MetricSeries) {
 .home-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 336px;
-  gap: 26px;
+  gap: var(--space-6);
   align-items: start;
 }
 
 .news {
   position: sticky;
   /* 与 .main 的顶部内边距对齐，吸顶时和主栏一起挂在视口上 */
-  top: 26px;
+  top: var(--main-pad);
 }
 
 .news-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  padding: 2px 4px 10px;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-1) var(--space-3);
 }
 
-.news-head h3 {
+.news-title {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   font-family: var(--font);
   font-size: 15px;
   font-weight: 600;
@@ -572,11 +566,11 @@ function sparkOption(sr: MetricSeries) {
 
 .news-list {
   display: grid;
-  gap: 12px;
+  gap: var(--space-3);
   /* 一屏内自己滚动：拖动滚动条即可翻完整列，主栏不受牵连 */
-  max-height: calc(100dvh - 152px);
+  max-height: calc(100dvh - var(--topbar-h) - (2 * var(--main-pad)));
   overflow-y: auto;
-  padding: 2px 6px 10px 2px;
+  padding: var(--space-1) var(--space-2) var(--space-3) var(--space-1);
   scrollbar-width: thin;
   scrollbar-color: var(--edge-strong) transparent;
 }
@@ -615,8 +609,8 @@ function sparkOption(sr: MetricSeries) {
 
 .news-body {
   display: grid;
-  gap: 6px;
-  padding: 12px 14px 11px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
 }
 
 .news-body h4 {
@@ -642,7 +636,7 @@ function sparkOption(sr: MetricSeries) {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-3);
   margin-top: 2px;
   font-size: 11.5px;
   color: var(--ink-faint);
@@ -659,8 +653,8 @@ function sparkOption(sr: MetricSeries) {
 }
 
 .news-foot {
-  margin-top: 10px;
-  padding: 0 4px;
+  margin-top: var(--space-3);
+  padding: 0 var(--space-1);
   font-size: 11px;
   line-height: 1.6;
   color: var(--ink-faint);
@@ -669,11 +663,11 @@ function sparkOption(sr: MetricSeries) {
 /* ---- 提问 ---- */
 .ask-form {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
   background: var(--sunk);
   border: 1px solid var(--edge);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 5px 5px 5px 18px;
   transition: border-color 0.3s var(--ease-soft), box-shadow 0.4s var(--ease);
 }
@@ -707,46 +701,30 @@ function sparkOption(sr: MetricSeries) {
 .seeds {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 12px;
-}
-
-.seeds button {
-  border: 1px solid var(--edge);
-  background: transparent;
-  color: var(--ink-mute);
-  border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: color 0.3s var(--ease-soft), border-color 0.3s var(--ease-soft),
-    background 0.4s var(--ease), transform 0.4s var(--ease);
-}
-
-.seeds button:active {
-  transform: scale(0.96);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .seeds button:hover {
-    color: var(--accent);
-    border-color: var(--accent-line);
-    background: var(--accent-wash);
-  }
+  gap: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 /* ---- 头条指标 ---- */
 .focus-who {
-  margin-top: 12px;
+  margin-top: var(--space-3);
   font-size: 12.5px;
   color: var(--ink-faint);
+}
+
+.focus :deep(.lab-name) {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 /* ---- 其余越线项 ---- */
 .rest {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
   align-items: start;
 }
 
@@ -757,8 +735,8 @@ function sparkOption(sr: MetricSeries) {
 .rest-foot {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 11px;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
   font-size: 12px;
   color: var(--ink-faint);
 }
@@ -767,7 +745,7 @@ function sparkOption(sr: MetricSeries) {
 .trends {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .trend {
@@ -791,7 +769,7 @@ function sparkOption(sr: MetricSeries) {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 2px;
 }
 
@@ -810,14 +788,14 @@ function sparkOption(sr: MetricSeries) {
 /* ---- 家人 ---- */
 .folks {
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .folk {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 9px 10px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border: 0;
   border-radius: var(--r-control);
   background: none;
@@ -861,7 +839,7 @@ function sparkOption(sr: MetricSeries) {
 .face {
   width: 34px;
   height: 34px;
-  border-radius: 11px;
+  border-radius: var(--r-avatar);
   background: var(--accent-wash);
   border: 1px solid var(--accent-line);
   color: var(--accent);
@@ -884,12 +862,38 @@ function sparkOption(sr: MetricSeries) {
 }
 
 /* ---- 近期列表 ---- */
+.recent,
+.recent-group {
+  display: grid;
+}
+
+.recent {
+  gap: var(--space-4);
+}
+
+.recent-group {
+  gap: 0;
+}
+
+.recent-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.recent-label h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-mute);
+}
+
 .line {
   width: 100%;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 14px;
+  gap: var(--space-4);
   text-align: left;
   background: none;
   border: 0;
@@ -935,13 +939,16 @@ function sparkOption(sr: MetricSeries) {
 
 @media (max-width: 720px) {
   .page {
-    gap: 20px;
+    gap: var(--space-5);
   }
   .hero {
     max-width: none;
   }
   .rest {
     grid-template-columns: 1fr;
+  }
+  .quick {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

@@ -6,8 +6,8 @@
 
 <style scoped>
 .disclaimer {
-  margin-top: 14px;
-  padding-top: 10px;
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
   border-top: 1px dashed var(--edge-strong);
   color: var(--ink-faint);
   font-size: 12px;

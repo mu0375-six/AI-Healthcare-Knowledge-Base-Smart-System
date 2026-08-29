@@ -1,40 +1,43 @@
 <template>
   <div class="page">
-    <header class="head">
-      <p class="eyebrow">科室导诊</p>
-      <h1>不知道该挂哪个科？</h1>
-      <p class="lead">写下最困扰你的症状 —— 持续多久、什么时候加重。系统给出可能科室与紧急程度，不能替代分诊台。</p>
-    </header>
+    <PageHeader
+      kicker="科室导诊"
+      title="不知道该挂哪个科？"
+      desc="写下最困扰你的症状 —— 持续多久、什么时候加重。系统给出可能科室与紧急程度，不能替代分诊台。"
+    />
 
-    <section class="panel core-pad form rise">
-      <label class="field">
-        <span>主要症状</span>
-        <el-input v-model="form.symptoms" type="textarea" :rows="5" placeholder="例如：胸痛伴呼吸困难、反复头晕、多饮多尿…" />
-      </label>
-
-      <div class="quick">
-        <span class="quick-label">常见描述</span>
-        <button v-for="s in samples" :key="s" class="quick-chip" type="button" @click="form.symptoms = s">{{ s }}</button>
-      </div>
-
-      <div class="two">
+    <Shell v-reveal>
+      <div class="form">
         <label class="field">
-          <span>年龄</span>
-          <el-input-number v-model="form.age" :min="0" :max="120" style="width: 100%" />
+          <span>主要症状</span>
+          <el-input v-model="form.symptoms" type="textarea" :rows="5" placeholder="例如：胸痛伴呼吸困难、反复头晕、多饮多尿…" />
         </label>
-        <label class="field">
-          <span>性别</span>
-          <el-select v-model="form.sex" clearable placeholder="可不填" style="width: 100%">
-            <el-option label="男" value="男" />
-            <el-option label="女" value="女" />
-          </el-select>
-        </label>
-      </div>
 
-      <button class="btn btn-primary" type="button" :disabled="loading || !form.symptoms.trim()" @click="submit">
-        <span v-html="ICONS.spark"></span>{{ loading ? '正在导诊…' : '开始导诊' }}
-      </button>
-    </section>
+        <div class="quick">
+          <span class="quick-label">常见描述</span>
+          <button v-for="s in samples" :key="s" class="chip-btn" type="button" @click="form.symptoms = s">{{ s }}</button>
+        </div>
+
+        <div class="two">
+          <label class="field">
+            <span>年龄</span>
+            <el-input-number v-model="form.age" :min="0" :max="120" style="width: 100%" />
+          </label>
+          <label class="field">
+            <span>性别</span>
+            <el-select v-model="form.sex" clearable placeholder="可不填" style="width: 100%">
+              <el-option label="男" value="男" />
+              <el-option label="女" value="女" />
+            </el-select>
+          </label>
+        </div>
+
+        <button class="btn btn-primary btn-cta" type="button" :disabled="loading || !form.symptoms.trim()" @click="submit">
+          {{ loading ? '正在导诊…' : '开始导诊' }}
+          <span class="knob" v-html="loading ? ICONS.clock : ICONS.arrow"></span>
+        </button>
+      </div>
+    </Shell>
 
     <div v-if="loading" class="result">
       <div class="skeleton" style="height: 52px; border-radius: var(--r-card)"></div>
@@ -44,35 +47,49 @@
     </div>
 
     <div v-else-if="result" class="result">
-      <div class="notice rise" :class="tone(result.urgency)">
-        <span v-html="urgencyIcon(result.urgency)"></span>
-        <span>综合紧急程度：<b>{{ urgencyText(result.urgency) }}</b></span>
-        <span class="hint">{{ urgencyHint(result.urgency) }}</span>
-      </div>
+      <section class="urgency" :class="result.urgency" v-reveal>
+        <div class="urgency-copy">
+          <span>综合紧急程度</span>
+          <strong>{{ urgencyText(result.urgency) }}</strong>
+          <p>{{ urgencyHint(result.urgency) }}</p>
+        </div>
+        <div
+          class="urgency-scale"
+          role="img"
+          :aria-label="`综合紧急程度：${urgencyText(result.urgency)}。${urgencyHint(result.urgency)}`"
+        >
+          <div class="urgency-rail">
+            <span v-for="s in urgencySegments" :key="s.key" class="urgency-segment" :class="s.key"></span>
+            <i class="urgency-cursor" :style="{ left: urgencyPosition + '%' }"></i>
+          </div>
+          <div class="urgency-labels" aria-hidden="true">
+            <span v-for="s in urgencySegments" :key="s.key" :class="{ active: s.key === result.urgency }">{{ s.label }}</span>
+          </div>
+        </div>
+      </section>
 
       <div class="depts">
-        <article v-for="(d, i) in result.departments" :key="d.department" class="tile dept rise">
+        <article v-for="(d, i) in result.departments" :key="d.department" class="tile dept" v-reveal="i * 60">
           <div class="dept-top">
             <span class="rank num">{{ i + 1 }}</span>
-            <h3>{{ d.department }}</h3>
-            <span class="chip" :class="tone(d.urgency)">{{ urgencyText(d.urgency) }}</span>
+            <h3 class="dept-title">{{ d.department }}</h3>
           </div>
           <p>{{ d.reason }}</p>
-          <div class="score">
+          <div class="score" role="img" :aria-label="`匹配度${matchLevel(d.score)}`">
             <div class="bar"><i :style="{ width: pct(d.score) + '%' }"></i></div>
-            <small class="num">{{ d.score }}</small>
+            <small>匹配度{{ matchLevel(d.score) }}</small>
           </div>
         </article>
       </div>
 
-      <section class="panel core-pad rise">
+      <section class="panel core-pad" v-reveal>
         <div class="section-head"><h3>导诊说明</h3></div>
         <div class="prose" v-html="renderMarkdown(result.summary)"></div>
       </section>
 
       <!-- 附近医疗资源：机构数据来自高德地图的真实 POI，大模型只对列表做解释。
            位置默认用完即走；勾选「保存此地址」才落库，可随时清除。 -->
-      <section class="panel core-pad rise near">
+      <section class="panel core-pad near" v-reveal>
         <div class="section-head">
           <h3>附近医疗资源</h3>
           <span v-if="savedLoc" class="count">
@@ -115,7 +132,7 @@
                   <span v-if="p.distanceMeters != null" class="chip dist">{{ fmtDist(p.distanceMeters) }}</span>
                 </div>
                 <p v-if="p.address" class="poi-addr">{{ p.address }}</p>
-                <a v-if="p.tel" class="poi-tel" :href="'tel:' + p.tel">☎ {{ p.tel }}</a>
+                <a v-if="p.tel" class="poi-tel" :href="'tel:' + p.tel"><span v-html="ICONS.phone"></span>{{ p.tel }}</a>
               </article>
             </div>
 
@@ -127,7 +144,7 @@
                   <span v-if="p.distanceMeters != null" class="chip dist">{{ fmtDist(p.distanceMeters) }}</span>
                 </div>
                 <p v-if="p.address" class="poi-addr">{{ p.address }}</p>
-                <a v-if="p.tel" class="poi-tel" :href="'tel:' + p.tel">☎ {{ p.tel }}</a>
+                <a v-if="p.tel" class="poi-tel" :href="'tel:' + p.tel"><span v-html="ICONS.phone"></span>{{ p.tel }}</a>
               </article>
             </div>
             <p class="near-note">机构信息来自地图服务，就诊/购药前请电话确认。</p>
@@ -141,8 +158,6 @@
       <h3>还没有导诊结果</h3>
       <p>症状写得越具体，推荐的科室越准。</p>
     </div>
-
-    <MedicalDisclaimer />
   </div>
 </template>
 
@@ -159,7 +174,8 @@ import {
 import type { TriageResult } from '@/api/types'
 import { renderMarkdown } from '@/utils/markdown'
 import { ICONS } from '@/utils/icons'
-import MedicalDisclaimer from '@/components/MedicalDisclaimer.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import Shell from '@/components/Shell.vue'
 
 const loading = ref(false)
 const result = ref<TriageResult | null>(null)
@@ -263,6 +279,11 @@ function fmtDist(m?: number | null) {
 }
 
 const samples = ['胸闷、活动后加重两周', '反复头晕伴恶心', '低烧咳嗽一周不退', '多饮多尿、体重下降']
+const urgencySegments = [
+  { key: 'self_care', label: '自我观察' },
+  { key: 'outpatient', label: '门诊' },
+  { key: 'emergency', label: '急诊' },
+] as const
 
 // 匹配分的量纲后端未固定：按当次结果里的最高分归一化，
 // 保证进度条永远有一个铺满的参照，而不是全都挤在左边一小截。
@@ -270,6 +291,13 @@ const maxScore = computed(() => Math.max(...(result.value?.departments || []).ma
 
 function pct(score: number) {
   return Math.max(8, Math.round((Number(score) || 0) / maxScore.value * 100))
+}
+
+function matchLevel(score: number) {
+  const value = pct(score)
+  if (value >= 72) return '高'
+  if (value >= 40) return '中'
+  return '低'
 }
 
 async function submit() {
@@ -285,15 +313,10 @@ function urgencyText(u: string) {
   return ({ emergency: '急诊', outpatient: '门诊', self_care: '可先自我观察' } as Record<string, string>)[u] || u
 }
 
-/** 紧急程度 → 语义色（全站统一的 tone token，深浅主题都成立）。 */
-/** 紧急程度 → 数据色类名。急诊=高危色，门诊=偏离色，自我观察=正常色。 */
-function tone(u: string) {
-  return ({ emergency: 'high', outpatient: 'low', self_care: 'normal' } as Record<string, string>)[u] || ''
-}
-
-function urgencyIcon(u: string) {
-  return u === 'emergency' ? ICONS.alert : u === 'outpatient' ? ICONS.clock : ICONS.check
-}
+const urgencyPosition = computed(() => {
+  const index = urgencySegments.findIndex((s) => s.key === result.value?.urgency)
+  return ((index < 0 ? 1 : index) + 0.5) * (100 / urgencySegments.length)
+})
 
 function urgencyHint(u: string) {
   return (
@@ -310,29 +333,22 @@ function urgencyHint(u: string) {
 .page {
   max-width: 860px;
   display: grid;
-  gap: 18px;
+  gap: var(--space-5);
 }
 
-.head h1 {
-  margin: 4px 0 10px;
-  max-width: 9em;
-}
-
-.lead {
-  color: var(--ink-mute);
-  line-height: 1.75;
-  max-width: 27em;
+.page :deep(.head) {
+  margin-bottom: 0;
 }
 
 .form {
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .two {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 /* 常见描述：给不知道怎么描述症状的人一个起点 */
@@ -340,8 +356,8 @@ function urgencyHint(u: string) {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 7px;
-  margin-top: -6px;
+  gap: var(--space-2);
+  margin-top: calc(-1 * var(--space-2));
 }
 
 .quick-label {
@@ -349,58 +365,129 @@ function urgencyHint(u: string) {
   color: var(--ink-faint);
 }
 
-.quick-chip {
-  border: 1px solid var(--edge-strong);
-  background: var(--card);
-  color: var(--ink-mute);
-  border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease,
-    transform 0.12s var(--ease-out);
-}
-
-.quick-chip:active {
-  transform: scale(0.96);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .quick-chip:hover {
-    color: var(--accent);
-    border-color: var(--accent-line);
-    background: var(--accent-wash);
-  }
-}
-
 .result {
   display: grid;
-  gap: 14px;
+  gap: var(--space-4);
 }
 
-.notice .hint {
-  margin-left: auto;
+.urgency {
+  --urgency-tone: var(--flag-low);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+  gap: var(--space-5);
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+.urgency.self_care {
+  --urgency-tone: var(--flag-normal);
+}
+
+.urgency.emergency {
+  --urgency-tone: var(--flag-high);
+}
+
+.urgency-copy {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.urgency-copy > span {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.urgency-copy strong {
+  color: var(--urgency-tone);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 650;
+}
+
+.urgency-copy p {
+  color: var(--ink-mute);
   font-size: 13px;
-  opacity: 0.85;
+  line-height: 1.6;
+}
+
+.urgency-scale {
+  min-width: 0;
+}
+
+.urgency-rail {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.urgency-segment {
+  height: 8px;
+  border-radius: var(--r-pill);
+}
+
+.urgency-segment.self_care {
+  background: var(--flag-normal-wash);
+  border: 1px solid var(--flag-normal-line);
+}
+
+.urgency-segment.outpatient {
+  background: var(--flag-low-wash);
+  border: 1px solid var(--flag-low-line);
+}
+
+.urgency-segment.emergency {
+  background: var(--flag-high-wash);
+  border: 1px solid var(--flag-high-line);
+}
+
+.urgency-cursor {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: var(--r-pill);
+  background: var(--urgency-tone);
+  box-shadow: 0 0 0 3px var(--card);
+  transform: translate(-50%, -50%);
+  transition: left 0.4s var(--ease);
+}
+
+.urgency-labels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+.urgency-labels .active {
+  color: var(--urgency-tone);
+  font-weight: 650;
 }
 
 .depts {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
 }
 
 .dept {
-  padding: 18px 16px;
+  padding: var(--space-5) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .dept-top {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 /* 排名徽章：结果本就有序，标出来省得逐个比对匹配分 */
@@ -409,7 +496,7 @@ function urgencyHint(u: string) {
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   background: var(--flag-none-wash);
   color: var(--ink-mute);
   font-size: 12px;
@@ -422,10 +509,10 @@ function urgencyHint(u: string) {
   color: var(--on-accent);
 }
 
-.dept h3 {
-  font-size: 18px;
+.dept-title {
   flex: 1;
   min-width: 0;
+  font-size: 18px;
 }
 
 .dept p {
@@ -438,14 +525,14 @@ function urgencyHint(u: string) {
 .score {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   margin-top: auto;
 }
 
 .bar {
   flex: 1;
   height: 5px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--sunk);
   overflow: hidden;
 }
@@ -453,7 +540,7 @@ function urgencyHint(u: string) {
 .bar i {
   display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--accent);
   transition: width 0.5s var(--ease-out);
 }
@@ -465,30 +552,25 @@ function urgencyHint(u: string) {
 }
 
 @media (max-width: 860px) {
-  .depts,
   .two {
     grid-template-columns: 1fr;
   }
-  .notice {
-    flex-wrap: wrap;
-  }
-  .notice .hint {
-    margin-left: 0;
-    flex-basis: 100%;
+  .urgency {
+    grid-template-columns: 1fr;
   }
 }
 
 /* ---- 附近医疗资源 ---- */
 .near {
   display: grid;
-  gap: 14px;
+  gap: var(--space-4);
 }
 
 .near-acts {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .near-input {
@@ -516,7 +598,7 @@ function urgencyHint(u: string) {
 .save-chk {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   font-size: 12.5px;
   color: var(--ink-mute);
   cursor: pointer;
@@ -570,21 +652,21 @@ function urgencyHint(u: string) {
 
 .pois {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
 }
 
 .poi {
-  padding: 13px 15px;
+  padding: var(--space-3) var(--space-4);
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .poi-top {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .poi-top b {
@@ -609,9 +691,17 @@ function urgencyHint(u: string) {
 }
 
 .poi-tel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   justify-self: start;
   font-size: 12.5px;
   color: var(--accent);
+}
+
+.poi-tel :deep(svg) {
+  width: 14px;
+  height: 14px;
 }
 
 .near-note {
@@ -619,9 +709,4 @@ function urgencyHint(u: string) {
   color: var(--ink-faint);
 }
 
-@media (max-width: 720px) {
-  .pois {
-    grid-template-columns: 1fr;
-  }
-}
 </style>
