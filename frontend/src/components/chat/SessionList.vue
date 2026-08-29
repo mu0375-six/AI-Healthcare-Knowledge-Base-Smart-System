@@ -7,7 +7,10 @@
     @transitionend="onDrawerTransitionEnd"
   >
     <div class="drawer-head">
-      <strong>会话</strong>
+      <span>
+        <small>问诊记录</small>
+        <strong>最近会话</strong>
+      </span>
       <button
         ref="closeButton"
         class="drawer-close"
@@ -18,12 +21,20 @@
       ></button>
     </div>
 
-    <button class="btn btn-ghost btn-block new" type="button" @click="$emit('new')">
-      <span v-html="ICONS.plus"></span>新对话
+    <button class="btn btn-primary btn-block new" type="button" @click="$emit('new')">
+      <span v-html="ICONS.plus"></span>开始新问诊
     </button>
 
+    <div class="list-head">
+      <span>最近更新</span>
+      <small>{{ sessions.length }}</small>
+    </div>
     <div class="sess-list">
-      <p v-if="!sessions.length" class="quiet">还没有会话</p>
+      <div v-if="!sessions.length" class="quiet">
+        <span v-html="ICONS.chat"></span>
+        <b>还没有问诊记录</b>
+        <small>开始一次新问诊后，会话将保存在这里</small>
+      </div>
       <template v-for="s in sessions" :key="s.id">
         <div v-if="editingId === s.id" class="sess-row editing">
           <input
@@ -144,23 +155,75 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
 </script>
 
 <style scoped>
-/* 侧栏不做成发亮的白色面板：会话很少时，一整根到底的空白高柱
-   比没有还难看。改成融进页面底色的列表，只用一条发丝线收边。 */
 .sessions {
   display: flex;
   flex-direction: column;
-  padding: 0 12px 0 0;
+  padding: var(--space-4) var(--space-3);
   border-right: 1px solid var(--edge);
   min-height: 0;
   overflow: hidden;
+  background: var(--paper-2);
 }
 
 .drawer-head {
-  display: none;
+  min-height: 38px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 var(--space-1) var(--space-3);
+}
+
+.drawer-head > span {
+  min-width: 0;
+}
+
+.drawer-head small {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.drawer-head strong {
+  display: block;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .new {
-  margin-bottom: 10px;
+  justify-content: flex-start;
+  margin-bottom: var(--space-5);
+}
+
+.new :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0 var(--space-1) var(--space-2);
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.list-head small {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding-inline: 5px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--card) 48%, transparent);
+  font-size: 10.5px;
 }
 
 .sess-list {
@@ -172,7 +235,39 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
 }
 
 .quiet {
-  padding: 18px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: var(--space-5) var(--space-2);
+  color: var(--ink-faint);
+}
+
+.quiet > span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-control);
+  background: color-mix(in srgb, var(--card) 52%, transparent);
+}
+
+.quiet :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.quiet b {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.quiet small {
+  margin-top: var(--space-1);
+  font-size: 11.5px;
+  line-height: 1.6;
 }
 
 .sess-row {
@@ -183,6 +278,7 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
   gap: var(--space-1);
   background: none;
   border: 0;
+  min-height: 48px;
   border-radius: var(--r-control);
   padding: var(--space-1);
   color: var(--ink-soft);
@@ -200,16 +296,16 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
   }
 }
 
-/* 当前会话：主色底 + 左侧竖条，与顶部导航的选中语言保持一致 */
 .sess-row.active {
-  background: var(--accent-wash);
+  background: var(--card);
   color: var(--accent);
+  box-shadow: 0 0 0 1px var(--edge) inset;
 }
 
 .sess-row.active::before {
   content: '';
   position: absolute;
-  left: 0;
+  left: 1px;
   top: 50%;
   width: 3px;
   height: 16px;
@@ -237,8 +333,8 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
 
 .sess-main b {
   display: block;
-  font-weight: 500;
-  font-size: 13.5px;
+  font-weight: 550;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -247,7 +343,7 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
 .sess-main time {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--ink-faint);
 }
 
@@ -306,8 +402,9 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
 
 .more {
   width: 100%;
-  border: 0;
-  background: none;
+  margin-top: var(--space-2);
+  border: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--card) 48%, transparent);
   padding: var(--space-2);
   color: var(--ink-faint);
   font-size: 12px;
@@ -320,23 +417,16 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
 }
 
 @media (max-width: 900px) {
-  .drawer-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    margin-bottom: var(--space-3);
-  }
-
-  .drawer-head strong {
-    font-size: 16px;
-    font-weight: 600;
-  }
-
   .drawer-close {
     width: 32px;
     height: 32px;
     border-radius: var(--r-pill);
+  }
+}
+
+@media (min-width: 901px) {
+  .drawer-close {
+    display: none;
   }
 }
 

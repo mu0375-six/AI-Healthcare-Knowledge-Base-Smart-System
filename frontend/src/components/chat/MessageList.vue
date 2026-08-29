@@ -1,57 +1,74 @@
 <template>
-  <div ref="scroller" class="messages">
-    <button v-if="hasEarlier && messages.length" class="btn btn-quiet btn-sm earlier" type="button" @click="$emit('earlier')">
-      加载更早消息
-    </button>
-
-    <!-- 空态是行动的邀请，不是一句"暂无数据" -->
-    <div v-if="!messages.length" class="blank">
-      <h2>把症状、药品或检查，说具体一点。</h2>
-      <p>回答会尽量口语，用药与疾病写得更专业，并标出知识库出处。也可以直接发化验单、药盒或患处照片。</p>
-      <div class="chips">
-        <button v-for="s in suggests" :key="s" class="chip-btn" type="button" @click="$emit('suggest', s)">
-          {{ s }}
-        </button>
-      </div>
-      <router-link class="to-triage" to="/triage">
-        <span v-html="ICONS.compass"></span>
-        <span>
-          <b>不知道该挂哪个科？</b>
-          <i>填症状，给出可能科室与紧急程度</i>
-        </span>
-      </router-link>
-    </div>
-
-    <article v-for="m in messages" :key="m.id" class="bubble" :class="m.role">
-      <div class="who">
-        <span v-if="m.role === 'user'" class="who-av">我</span>
-        <span v-else class="who-av bot" v-html="ICONS.spark"></span>
-        <span>{{ m.role === 'user' ? '我' : '康识助手' }}</span>
-      </div>
-
-      <div v-if="m.role === 'user'" class="pics">
-        <ChatPhoto v-for="(p, i) in m.localPreviews || []" :key="'p' + i" :src="p" alt="发送的图片" />
-        <ChatPhoto v-for="a in attachmentsOf(m)" :key="a.id" :id="a.id" :alt="a.filename" />
-      </div>
-
-      <div v-if="m.role === 'user'" class="said">{{ m.content }}</div>
-      <div v-else class="prose answer">
-        <span v-html="renderMarkdown(m.content, terms)"></span><span
-          v-if="streaming && m === lastMsg"
-          class="caret"
-          aria-hidden="true"
-        ></span>
-      </div>
-
+  <div ref="scroller" class="messages" aria-label="问诊消息">
+    <div class="timeline">
       <button
-        v-if="m.role === 'assistant' && m.id > 0 && !streaming"
-        class="btn btn-quiet btn-sm fav"
+        v-if="hasEarlier && messages.length"
+        class="btn btn-quiet btn-sm earlier"
         type="button"
-        @click="$emit('fav', m.id)"
+        @click="$emit('earlier')"
       >
-        <span v-html="ICONS.star"></span>收藏该回答
+        加载更早消息
       </button>
-    </article>
+
+      <div v-if="!messages.length" class="blank">
+        <div class="blank-heading">
+          <span class="blank-icon" v-html="ICONS.spark"></span>
+          <span>
+            <small>开始问诊</small>
+            <h2>今天想了解哪方面的健康问题？</h2>
+          </span>
+        </div>
+        <p class="blank-copy">请说明症状出现的时间、位置和变化，或直接发送化验单、药盒及患处照片。</p>
+        <div class="quick-start">
+          <span class="quick-label">常用提问</span>
+          <div class="suggestion-list">
+            <button v-for="s in suggests" :key="s" type="button" @click="$emit('suggest', s)">
+              <span>{{ s }}</span>
+              <span class="suggest-arrow" v-html="ICONS.arrow"></span>
+            </button>
+          </div>
+        </div>
+        <router-link class="to-triage" to="/triage">
+          <span class="triage-icon" v-html="ICONS.compass"></span>
+          <span>
+            <b>不确定该挂哪个科室？</b>
+            <i>前往科室导诊，查看紧急程度与建议科室</i>
+          </span>
+          <span class="triage-arrow" v-html="ICONS.arrow"></span>
+        </router-link>
+      </div>
+
+      <article v-for="m in messages" :key="m.id" class="bubble" :class="m.role">
+        <div class="who">
+          <span v-if="m.role === 'user'" class="who-av">我</span>
+          <span v-else class="who-av bot" v-html="ICONS.spark"></span>
+          <span>{{ m.role === 'user' ? '我' : '康识助手' }}</span>
+        </div>
+
+        <div v-if="m.role === 'user'" class="pics">
+          <ChatPhoto v-for="(p, i) in m.localPreviews || []" :key="'p' + i" :src="p" alt="发送的图片" />
+          <ChatPhoto v-for="a in attachmentsOf(m)" :key="a.id" :id="a.id" :alt="a.filename" />
+        </div>
+
+        <div v-if="m.role === 'user'" class="said">{{ m.content }}</div>
+        <div v-else class="prose answer">
+          <span v-html="renderMarkdown(m.content, terms)"></span><span
+            v-if="streaming && m === lastMsg"
+            class="caret"
+            aria-hidden="true"
+          ></span>
+        </div>
+
+        <button
+          v-if="m.role === 'assistant' && m.id > 0 && !streaming"
+          class="btn btn-quiet btn-sm fav"
+          type="button"
+          @click="$emit('fav', m.id)"
+        >
+          <span v-html="ICONS.star"></span>收藏该回答
+        </button>
+      </article>
+    </div>
   </div>
 </template>
 
@@ -105,95 +122,195 @@ defineExpose({
 .messages {
   flex: 1;
   overflow: auto;
-  padding: 16px 4px 8px;
+  min-height: 0;
+  background: color-mix(in srgb, var(--paper) 28%, var(--card));
+  scrollbar-gutter: stable;
+}
+
+.timeline {
+  width: min(100%, 820px);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-6) var(--space-5);
 }
 
 .earlier {
   display: block;
-  margin: 0 auto 10px;
+  margin: 0 auto var(--space-4);
 }
 
-/* ---- 空态 ---- */
 .blank {
-  max-width: 560px;
-  padding: 24px 4px;
+  max-width: 680px;
+  padding-top: clamp(var(--space-4), 7vh, var(--space-7));
+}
+
+.blank-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.blank-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-control);
+  background: var(--accent);
+  color: var(--on-accent);
+  flex-shrink: 0;
+}
+
+.blank-icon :deep(svg) {
+  width: 18px;
+  height: 18px;
+}
+
+.blank-heading small {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 600;
 }
 
 .blank h2 {
-  margin-bottom: 10px;
-  /* 不设 max-width：18ch 会把这句话折成"把症状、药品或检 / 查，说具体一点"，
-     断在词中间。让 text-wrap: balance 自己找断点。 */
+  margin: 0;
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1.35;
   text-wrap: balance;
 }
 
-.blank p {
+.blank-copy {
+  max-width: 42em;
+  margin: var(--space-4) 0 0 50px;
   color: var(--ink-mute);
-  line-height: 1.75;
-  max-width: 30em;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
-.chips {
+.quick-start {
+  margin-top: var(--space-6);
+}
+
+.quick-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.suggestion-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--edge);
+}
+
+.suggestion-list button {
+  min-width: 0;
+  min-height: 48px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 18px;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-bottom: 1px solid var(--edge);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+  transition: background 0.15s var(--ease-soft), color 0.15s var(--ease-soft);
 }
 
-/* 导诊入口放在空态里：科室导诊已从顶级导航降级，
-   而"不知道挂哪科"恰好是问诊页最常见的相邻需求。 */
+.suggestion-list button:nth-child(odd) {
+  border-right: 1px solid var(--edge);
+}
+
+.suggestion-list button:hover,
+.suggestion-list button:focus-visible {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.suggestion-list button > span:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.suggest-arrow,
+.triage-arrow {
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+  flex-shrink: 0;
+}
+
+.suggest-arrow :deep(svg),
+.triage-arrow :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+
 .to-triage {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 24px;
-  padding: 14px 16px;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-card);
-  background: var(--card);
-  box-shadow: var(--shadow-1);
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding: var(--space-3);
+  border-block: 1px solid var(--accent-line);
+  background: var(--accent-wash);
   color: var(--ink);
-  transition: border-color 0.15s ease, box-shadow 0.24s var(--ease-out),
-    transform 0.24s var(--ease-out);
+  transition: background 0.15s var(--ease-soft);
 }
 
-.to-triage:active {
-  transform: scale(0.985);
+.to-triage:hover {
+  background: color-mix(in srgb, var(--accent-wash) 72%, var(--card));
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .to-triage:hover {
-    border-color: var(--edge-strong);
-    box-shadow: var(--shadow-2);
-    transform: translateY(-2px);
-  }
-}
-
-.to-triage :deep(svg) {
-  width: 22px;
-  height: 22px;
+.triage-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-control);
   color: var(--accent);
   flex-shrink: 0;
 }
 
+.triage-icon :deep(svg) {
+  width: 17px;
+  height: 17px;
+}
+
+.to-triage > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+
 .to-triage b {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .to-triage i {
   display: block;
   font-style: normal;
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: var(--ink-faint);
   margin-top: 2px;
 }
 
-/* ---- 气泡 ---- */
 .bubble {
-  margin: 18px 0;
-  max-width: 84%;
-  animation: bubble-in 300ms var(--ease-out) backwards;
+  width: 100%;
+  padding: var(--space-5) 0;
+  border-bottom: 1px solid var(--edge);
+  animation: bubble-in 180ms var(--ease-out) backwards;
 }
 
 @keyframes bubble-in {
@@ -204,7 +321,9 @@ defineExpose({
 }
 
 .bubble.user {
-  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 .who {
@@ -214,7 +333,7 @@ defineExpose({
   font-size: 12px;
   font-weight: 550;
   color: var(--ink-faint);
-  margin-bottom: 7px;
+  margin-bottom: var(--space-2);
 }
 
 .bubble.user .who {
@@ -246,25 +365,20 @@ defineExpose({
 
 .said,
 .answer {
-  background: var(--card);
-  border: 1px solid var(--edge);
-  box-shadow: var(--shadow-1);
-  padding: 13px 16px;
-  border-radius: var(--r-card);
+  color: var(--ink);
 }
 
-/* 靠近发言人的那个角收紧：气泡"指向"说话的一方 */
 .bubble.assistant .answer {
-  border-top-left-radius: 4px;
-  max-width: 34em;
+  max-width: 68ch;
+  margin-left: 30px;
 }
 
 .bubble.user .said {
-  border-top-right-radius: 4px;
+  max-width: min(72%, 36em);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-card) 2px var(--r-card) var(--r-card);
   background: var(--accent-wash);
-  border-color: var(--accent-line);
-  color: var(--ink);
-  box-shadow: none;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -272,12 +386,11 @@ defineExpose({
 .pics {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
   justify-content: flex-end;
 }
 
-/* 流式生成的光标：只在最后一条还在输出时出现 */
 .caret {
   display: inline;
 }
@@ -300,7 +413,8 @@ defineExpose({
 }
 
 .fav {
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
+  margin-left: 30px;
   color: var(--ink-faint);
   transition: color 0.15s var(--ease-soft), background 0.15s var(--ease-soft);
 }
@@ -311,8 +425,51 @@ defineExpose({
 }
 
 @media (max-width: 720px) {
-  .bubble {
-    max-width: 94%;
+  .timeline {
+    padding: var(--space-5) var(--space-4) var(--space-4);
+  }
+
+  .blank {
+    padding-top: var(--space-4);
+  }
+
+  .blank-heading {
+    align-items: flex-start;
+  }
+
+  .blank h2 {
+    font-size: 19px;
+  }
+
+  .blank-copy {
+    margin-left: 0;
+  }
+
+  .suggestion-list {
+    grid-template-columns: 1fr;
+  }
+
+  .suggestion-list button:nth-child(odd) {
+    border-right: 0;
+  }
+
+  .bubble.user .said {
+    max-width: 88%;
+  }
+
+  .bubble.assistant .answer {
+    margin-left: 0;
+  }
+
+  .fav {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble,
+  .caret::after {
+    animation: none;
   }
 }
 </style>

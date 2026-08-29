@@ -1,51 +1,66 @@
 <template>
   <div class="composer" :class="{ dragging }" @paste="onPaste" @dragover.prevent="dragging = true" @dragleave="dragging = false" @drop.prevent="onDrop">
-    <div v-if="pending.length" class="pending">
-      <div v-for="(p, i) in pending" :key="p.key" class="thumb">
-        <img :src="p.preview" alt="" />
-        <button type="button" aria-label="移除图片" @click="removePending(i)" v-html="ICONS.close"></button>
+    <div class="composer-inner">
+      <div class="compose-shell">
+        <div v-if="pending.length" class="pending" aria-label="待发送图片">
+          <div v-for="(p, i) in pending" :key="p.key" class="thumb">
+            <img :src="p.preview" alt="" />
+            <button type="button" aria-label="移除图片" @click="removePending(i)" v-html="ICONS.close"></button>
+          </div>
+        </div>
+
+        <el-input
+          v-model="question"
+          type="textarea"
+          :rows="2"
+          resize="none"
+          aria-label="输入健康问题"
+          placeholder="描述症状、药品或检查结果..."
+          @keydown="onKey"
+        />
+
+        <div class="bar">
+          <div class="tools">
+            <label class="tool" title="从相册或电脑选图">
+              <span v-html="ICONS.image"></span>
+              <span class="tool-txt">图片</span>
+              <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple hidden @change="onPick" />
+            </label>
+            <label class="tool" title="调用摄像头拍照">
+              <span v-html="ICONS.camera"></span>
+              <span class="tool-txt">拍照</span>
+              <input type="file" accept="image/*" capture="environment" hidden @change="onPick" />
+            </label>
+            <span class="hint">
+              <span class="hint-wide">图片单张不超过 4 MB</span>
+              <span class="hint-short">最多 4 张</span>
+            </span>
+          </div>
+
+          <button
+            v-if="streaming"
+            class="btn btn-ghost composer-action"
+            type="button"
+            title="停止生成"
+            aria-label="停止生成"
+            @click="$emit('stop')"
+          >
+            <span v-html="ICONS.stop"></span>
+          </button>
+          <button
+            v-else
+            class="btn btn-primary composer-action"
+            type="button"
+            title="发送"
+            aria-label="发送消息"
+            :disabled="!question.trim() && !pending.length"
+            @click="submit"
+          >
+            <span v-html="ICONS.send"></span>
+          </button>
+        </div>
       </div>
-    </div>
-
-    <el-input
-      v-model="question"
-      type="textarea"
-      :rows="3"
-      resize="none"
-      placeholder="描述症状、药品或想了解的疾病知识，也可粘贴 / 拖入图片。Enter 发送，Shift+Enter 换行"
-      @keydown="onKey"
-    />
-
-    <div class="bar">
-      <div class="tools">
-        <label class="tool" title="从相册或电脑选图">
-          <span v-html="ICONS.image"></span>
-          <span class="tool-txt">图片</span>
-          <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple hidden @change="onPick" />
-        </label>
-        <label class="tool" title="调用摄像头拍照">
-          <span v-html="ICONS.camera"></span>
-          <span class="tool-txt">拍照</span>
-          <input type="file" accept="image/*" capture="environment" hidden @change="onPick" />
-        </label>
-        <span class="hint">
-          <span class="hint-wide">化验单、药盒、患处照片都能发</span>
-          <span class="hint-short">可直接发图片</span>
-        </span>
-      </div>
-
-      <button v-if="streaming" class="btn btn-ghost" type="button" @click="$emit('stop')">
-        <span v-html="ICONS.stop"></span>停止
-      </button>
-      <button
-        v-else
-        class="btn btn-primary"
-        type="button"
-        :disabled="!question.trim() && !pending.length"
-        @click="submit"
-      >
-        发送<span v-html="ICONS.send"></span>
-      </button>
+      <p class="composer-note">回答仅供健康科普参考，不替代医生诊断与治疗。</p>
     </div>
   </div>
 </template>
@@ -139,40 +154,50 @@ defineExpose({
 </script>
 
 <style scoped>
-/* 输入区是浮起的一块面，压在消息流之上 */
 .composer {
+  flex-shrink: 0;
+  padding: var(--space-3) var(--space-5) var(--space-2);
+  border-top: 1px solid var(--edge);
   background: var(--card);
-  border: 1px solid var(--edge);
+}
+
+.composer-inner {
+  width: min(100%, 820px);
+  margin: 0 auto;
+}
+
+.compose-shell {
+  overflow: hidden;
+  border: 1px solid var(--edge-strong);
   border-radius: var(--r-shell);
-  box-shadow: var(--shadow-2), var(--inner-light);
-  padding: 12px;
-  transition: border-color 0.18s ease, box-shadow 0.24s var(--ease-out);
+  background: var(--card);
+  transition: border-color 0.15s var(--ease-soft), box-shadow 0.15s var(--ease-soft);
 }
 
-.composer:focus-within {
+.compose-shell:focus-within {
   border-color: var(--accent-line);
-  box-shadow: var(--shadow-2), 0 0 0 3px var(--accent-wash);
+  box-shadow: 0 0 0 3px var(--accent-wash);
 }
 
-/* 拖入图片时整块高亮，明确"可以放这儿" */
-.composer.dragging {
+.composer.dragging .compose-shell {
   border-color: var(--accent);
-  box-shadow: var(--shadow-2), 0 0 0 3px var(--accent-wash);
+  box-shadow: 0 0 0 3px var(--accent-wash);
 }
 
 .composer :deep(.el-textarea__inner) {
   background: transparent !important;
   box-shadow: none !important;
-  padding: 4px 6px;
-  font-size: 15px;
-  line-height: 1.65;
+  min-height: 58px !important;
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .pending {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0;
 }
 
 .thumb {
@@ -216,8 +241,11 @@ defineExpose({
 .bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 8px;
+  gap: var(--space-3);
+  min-height: 44px;
+  padding: 5px 7px 5px var(--space-2);
+  border-top: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--paper) 34%, var(--card));
 }
 
 .tools {
@@ -227,24 +255,22 @@ defineExpose({
   min-width: 0;
 }
 
-/* 图标按钮而不是 emoji：emoji 在不同系统渲染成不同字形，
-   而且描边粗细跟界面其余图标对不上 */
 .tool {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 6px 11px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--edge-strong);
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px var(--space-2);
+  border-radius: var(--r-control);
+  border: 0;
   color: var(--ink-mute);
-  font-size: 13px;
+  font-size: 12.5px;
   cursor: pointer;
-  transition: color 0.15s var(--ease-soft), border-color 0.15s var(--ease-soft), background 0.15s var(--ease-soft),
-    transform 0.12s var(--ease-out);
+  transition: color 0.15s var(--ease-soft), background 0.15s var(--ease-soft);
 }
 
 .tool:active {
-  transform: scale(0.96);
+  background: var(--accent-wash);
 }
 
 .tool :deep(svg) {
@@ -256,7 +282,6 @@ defineExpose({
 @media (hover: hover) and (pointer: fine) {
   .tool:hover {
     color: var(--accent);
-    border-color: var(--accent-line);
     background: var(--accent-wash);
   }
 }
@@ -278,14 +303,30 @@ defineExpose({
   display: none;
 }
 
-.bar .btn {
+.composer-action {
+  width: 34px;
+  height: 34px;
+  padding: 0;
   margin-left: auto;
   flex-shrink: 0;
 }
 
+.composer-action :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.composer-note {
+  margin: 5px 0 0;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  line-height: 1.4;
+  text-align: center;
+}
+
 @media (max-width: 720px) {
   .composer {
-    padding: 10px;
+    padding: var(--space-2) var(--space-4) max(var(--space-2), env(safe-area-inset-bottom));
   }
   .tool-txt,
   .hint-wide {
@@ -298,7 +339,7 @@ defineExpose({
     font-size: 11.5px;
   }
   .tool {
-    padding: 7px 10px;
+    padding: 5px 7px;
   }
 }
 </style>

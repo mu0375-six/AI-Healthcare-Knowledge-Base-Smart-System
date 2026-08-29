@@ -23,24 +23,38 @@
       @click="closeSessions(true)"
     ></button>
 
-    <section class="board">
-      <div class="mobile-chatbar">
-        <button
-          ref="sessionTrigger"
-          class="btn btn-ghost btn-sm session-trigger"
-          type="button"
-          aria-controls="chat-session-drawer"
-          :aria-expanded="sessionsOpen && narrowScreen"
-          @click="openSessions"
-        >
-          <span v-html="ICONS.chat"></span>
-          <span class="session-trigger-label">{{ activeSessionTitle }}</span>
-        </button>
-      </div>
+    <section class="board" aria-label="健康问诊对话">
+      <header class="workspace-head">
+        <div class="desktop-chat-title">
+          <span class="title-icon" v-html="ICONS.chat"></span>
+          <span>
+            <b>{{ activeSessionTitle }}</b>
+            <small>健康知识库辅助问诊</small>
+          </span>
+        </div>
+        <div class="mobile-chatbar">
+          <button
+            ref="sessionTrigger"
+            class="session-trigger"
+            type="button"
+            aria-controls="chat-session-drawer"
+            :aria-expanded="sessionsOpen && narrowScreen"
+            @click="openSessions"
+          >
+            <span v-html="ICONS.chat"></span>
+            <span class="session-trigger-copy">
+              <b>{{ activeSessionTitle }}</b>
+              <small>查看会话记录</small>
+            </span>
+            <span class="trigger-caret" v-html="ICONS.chevron"></span>
+          </button>
+        </div>
+        <span class="service-state"><i aria-hidden="true"></i>问诊助手在线</span>
+      </header>
       <div v-if="profileHint" class="profile-bar">
         <span v-html="ICONS.file"></span>
         <span>正在结合「<b>{{ profileHint }}</b>」的档案提问</span>
-        <button type="button" @click="clearProfile">不用档案</button>
+        <button type="button" @click="clearProfile">移除关联</button>
       </div>
       <MessageList
         ref="messageList"
@@ -91,7 +105,7 @@ const sessionsOpen = ref(false)
 const drawerMedia = window.matchMedia('(max-width: 900px)')
 const narrowScreen = ref(drawerMedia.matches)
 const activeSessionTitle = computed(
-  () => sessions.value.find((session) => session.id === sessionId.value)?.title || '会话',
+  () => sessions.value.find((session) => session.id === sessionId.value)?.title || '新问诊',
 )
 
 // 会话分页：侧栏只装最近一页，攒多了按「加载更多」往后翻
@@ -302,10 +316,14 @@ async function fav(messageId: number) {
 <style scoped>
 .chat {
   display: grid;
-  grid-template-columns: 248px 1fr;
-  gap: 16px;
+  grid-template-columns: 264px minmax(0, 1fr);
   height: 100%;
   min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-shell);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
 }
 
 .mobile-chatbar,
@@ -325,26 +343,100 @@ async function fav(messageId: number) {
   border: 0;
 }
 
-/* 消息区不加背景面：让对话直接落在页面底色上，
-   气泡自己是浮起的构件。少一层嵌套，信息密度更高。 */
 .board {
   display: flex;
   flex-direction: column;
-  gap: 12px;
   min-height: 0;
   overflow: hidden;
+  background: var(--card);
+}
+
+.workspace-head {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-5);
+  border-bottom: 1px solid var(--edge);
+  flex-shrink: 0;
+}
+
+.desktop-chat-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.desktop-chat-title > span:last-child {
+  min-width: 0;
+}
+
+.desktop-chat-title b,
+.session-trigger-copy b {
+  display: block;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-chat-title small,
+.session-trigger-copy small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.title-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-control);
+  background: var(--accent-wash);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.title-icon :deep(svg) {
+  width: 18px;
+  height: 18px;
+}
+
+.service-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  color: var(--ink-mute);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.service-state i {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--flag-normal);
+  box-shadow: 0 0 0 3px var(--flag-normal-wash);
 }
 
 .profile-bar {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--r-card);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-5);
   background: var(--accent-wash);
-  border: 1px solid var(--accent-line);
+  border-bottom: 1px solid var(--accent-line);
   color: var(--accent);
-  font-size: 13px;
+  font-size: 12.5px;
   flex-shrink: 0;
 }
 
@@ -360,39 +452,86 @@ async function fav(messageId: number) {
 
 .profile-bar button {
   margin-left: auto;
-  border: 0;
-  background: none;
-  color: var(--ink-faint);
+  border: 1px solid var(--accent-line);
+  background: color-mix(in srgb, var(--card) 42%, transparent);
+  color: var(--accent);
   cursor: pointer;
-  font-size: 13px;
-  padding: 2px 6px;
+  font-size: 12px;
+  padding: 4px 8px;
   border-radius: var(--r-chip);
-  transition: color 0.15s var(--ease-soft);
+  transition: background 0.15s var(--ease-soft);
 }
 
 .profile-bar button:hover {
-  color: var(--ink);
+  background: var(--card);
 }
 
 @media (max-width: 900px) {
   .chat {
     grid-template-columns: 1fr;
-    gap: 12px;
   }
+
+  .workspace-head {
+    min-height: 58px;
+    padding: var(--space-2) var(--space-4);
+  }
+
+  .desktop-chat-title {
+    display: none;
+  }
+
   .mobile-chatbar {
     display: flex;
-    flex-shrink: 0;
+    min-width: 0;
+    flex: 1;
   }
 
   .session-trigger {
-    max-width: min(280px, 76vw);
+    width: min(100%, 360px);
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 3px 0;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
   }
 
-  .session-trigger-label {
+  .session-trigger > :deep(svg) {
+    width: 19px;
+    height: 19px;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .session-trigger-copy {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    flex: 1;
+  }
+
+  .trigger-caret {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: var(--ink-faint);
+  }
+
+  .trigger-caret :deep(svg) {
+    width: 16px;
+    height: 16px;
+  }
+
+  .service-state {
+    margin-left: var(--space-2);
+    font-size: 0;
+    gap: 0;
+  }
+
+  .profile-bar {
+    padding-inline: var(--space-4);
   }
 
   .chat :deep(.sessions) {
@@ -400,7 +539,6 @@ async function fav(messageId: number) {
     inset: var(--topbar-h) auto 0 0;
     z-index: var(--z-modal);
     width: min(320px, 88vw);
-    padding: var(--space-4);
     border-right: 1px solid var(--edge);
     background: var(--paper-2);
     box-shadow: var(--shadow-4);
@@ -426,6 +564,23 @@ async function fav(messageId: number) {
     border: 0;
     background: color-mix(in srgb, var(--ink) 42%, transparent);
     cursor: default;
+  }
+}
+
+@media (max-width: 520px) {
+  .chat {
+    margin-inline: calc(var(--space-4) * -1);
+    border-inline: 0;
+    border-bottom: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .profile-bar > span:nth-child(2) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
