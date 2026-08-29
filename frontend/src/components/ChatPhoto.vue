@@ -4,7 +4,14 @@
       <img v-if="display" :src="display" :alt="alt || '图片'" />
     </button>
     <Teleport to="body">
-      <div v-if="open" class="layer" @click.self="open = false">
+      <div
+        v-if="open"
+        class="layer"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="alt ? `图片预览：${alt}` : '图片预览'"
+        @click.self="open = false"
+      >
         <img v-if="display" :src="display" :alt="alt || '图片'" />
         <div class="actions">
           <button class="btn btn-primary" type="button" @click="save">保存到本地</button>
@@ -23,19 +30,32 @@ const props = defineProps<{ id?: number; src?: string; alt?: string }>()
 const display = ref(props.src || '')
 const open = ref(false)
 let objectUrl = ''
+let loadVersion = 0
 
 async function load() {
+  const version = ++loadVersion
+  revoke()
   if (props.src) {
     display.value = props.src
     return
   }
+  display.value = ''
   if (!props.id) return
-  revoke()
-  const resp = await authedFetch(`/api/chat/images/${props.id}`)
-  if (!resp.ok) return
-  const blob = await resp.blob()
-  objectUrl = URL.createObjectURL(blob)
-  display.value = objectUrl
+  try {
+    const resp = await authedFetch(`/api/chat/images/${props.id}`)
+    if (!resp.ok || version !== loadVersion) return
+    const blob = await resp.blob()
+    if (version !== loadVersion) return
+    const nextUrl = URL.createObjectURL(blob)
+    if (version !== loadVersion) {
+      URL.revokeObjectURL(nextUrl)
+      return
+    }
+    objectUrl = nextUrl
+    display.value = nextUrl
+  } catch {
+    if (version === loadVersion) display.value = ''
+  }
 }
 
 function save() {
@@ -62,6 +82,7 @@ function onKey(e: KeyboardEvent) {
 watch(() => [props.id, props.src], load, { immediate: true })
 onMounted(() => window.addEventListener('keydown', onKey))
 onBeforeUnmount(() => {
+  loadVersion += 1
   window.removeEventListener('keydown', onKey)
   revoke()
 })
@@ -88,24 +109,28 @@ onBeforeUnmount(() => {
 .layer {
   position: fixed;
   inset: 0;
-  z-index: 80;
-  background: rgba(16, 22, 19, 0.78);
+  z-index: calc(var(--z-modal) + 1);
+  background: color-mix(in srgb, var(--ink) 78%, transparent);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  padding: 24px;
+  gap: var(--space-4);
+  padding: var(--space-5);
 }
 .layer img {
   max-width: min(92vw, 1100px);
   max-height: 78vh;
   object-fit: contain;
   border-radius: var(--r-control);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-4);
 }
 .actions {
   display: flex;
-  gap: 10px;
+  gap: var(--space-3);
+}
+
+:global(html.dark) .layer {
+  background: color-mix(in srgb, var(--paper) 84%, transparent);
 }
 </style>

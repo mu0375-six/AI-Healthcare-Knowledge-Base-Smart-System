@@ -28,7 +28,10 @@
           <span class="tool-txt">拍照</span>
           <input type="file" accept="image/*" capture="environment" hidden @change="onPick" />
         </label>
-        <span class="hint">化验单、药盒、患处照片都能发</span>
+        <span class="hint">
+          <span class="hint-wide">化验单、药盒、患处照片都能发</span>
+          <span class="hint-short">可直接发图片</span>
+        </span>
       </div>
 
       <button v-if="streaming" class="btn btn-ghost" type="button" @click="$emit('stop')">
@@ -48,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ICONS } from '@/utils/icons'
 
@@ -103,6 +106,11 @@ function removePending(i: number) {
   pending.value.splice(i, 1)
 }
 
+function releasePending() {
+  for (const item of pending.value) URL.revokeObjectURL(item.preview)
+  pending.value = []
+}
+
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
@@ -115,9 +123,11 @@ function submit() {
   const files = pending.value.map((p) => p.file)
   if (!text && !files.length) return
   question.value = ''
-  pending.value = []
+  releasePending()
   emit('send', text, files)
 }
+
+onBeforeUnmount(releasePending)
 
 defineExpose({
   /** 路由带预设问题时由视图填入并触发。 */
@@ -190,9 +200,9 @@ defineExpose({
   width: 18px;
   height: 18px;
   border: 0;
-  border-radius: 50%;
-  background: rgba(11, 15, 25, 0.62);
-  color: #fff;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--ink) 68%, transparent);
+  color: var(--paper);
   cursor: pointer;
   padding: 0;
 }
@@ -224,7 +234,7 @@ defineExpose({
   align-items: center;
   gap: 5px;
   padding: 6px 11px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 1px solid var(--edge-strong);
   color: var(--ink-mute);
   font-size: 13px;
@@ -259,6 +269,15 @@ defineExpose({
   white-space: nowrap;
 }
 
+:global(html.dark) .thumb button {
+  background: color-mix(in srgb, var(--paper) 76%, transparent);
+  color: var(--ink);
+}
+
+.hint-short {
+  display: none;
+}
+
 .bar .btn {
   margin-left: auto;
   flex-shrink: 0;
@@ -269,8 +288,14 @@ defineExpose({
     padding: 10px;
   }
   .tool-txt,
-  .hint {
+  .hint-wide {
     display: none;
+  }
+  .hint-short {
+    display: inline;
+  }
+  .hint {
+    font-size: 11.5px;
   }
   .tool {
     padding: 7px 10px;

@@ -9,7 +9,9 @@
       <h2>把症状、药品或检查，说具体一点。</h2>
       <p>回答会尽量口语，用药与疾病写得更专业，并标出知识库出处。也可以直接发化验单、药盒或患处照片。</p>
       <div class="chips">
-        <button v-for="s in suggests" :key="s" type="button" @click="$emit('suggest', s)">{{ s }}</button>
+        <button v-for="s in suggests" :key="s" class="chip-btn" type="button" @click="$emit('suggest', s)">
+          {{ s }}
+        </button>
       </div>
       <router-link class="to-triage" to="/triage">
         <span v-html="ICONS.compass"></span>
@@ -34,7 +36,11 @@
 
       <div v-if="m.role === 'user'" class="said">{{ m.content }}</div>
       <div v-else class="prose answer">
-        <span v-html="renderMarkdown(m.content, terms)"></span><span v-if="streaming && m === lastMsg" class="caret">▍</span>
+        <span v-html="renderMarkdown(m.content, terms)"></span><span
+          v-if="streaming && m === lastMsg"
+          class="caret"
+          aria-hidden="true"
+        ></span>
       </div>
 
       <button
@@ -131,30 +137,6 @@ defineExpose({
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 18px;
-}
-
-.chips button {
-  border: 1px solid var(--edge-strong);
-  background: var(--card);
-  color: var(--ink-soft);
-  border-radius: 999px;
-  padding: 7px 14px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease,
-    transform 0.12s var(--ease-out);
-}
-
-.chips button:active {
-  transform: scale(0.96);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .chips button:hover {
-    color: var(--accent);
-    border-color: var(--accent-line);
-    background: var(--accent-wash);
-  }
 }
 
 /* 导诊入口放在空态里：科室导诊已从顶级导航降级，
@@ -274,7 +256,7 @@ defineExpose({
 /* 靠近发言人的那个角收紧：气泡"指向"说话的一方 */
 .bubble.assistant .answer {
   border-top-left-radius: 4px;
-  max-width: none;
+  max-width: 34em;
 }
 
 .bubble.user .said {
@@ -297,7 +279,17 @@ defineExpose({
 
 /* 流式生成的光标：只在最后一条还在输出时出现 */
 .caret {
-  color: var(--accent);
+  display: inline;
+}
+
+.caret::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: -0.12em;
+  background: var(--accent);
   animation: blink 1s steps(1) infinite;
 }
 
@@ -307,22 +299,15 @@ defineExpose({
   }
 }
 
-/* 收藏按钮平时收起：每条回答都挂个按钮会把版面切碎 */
 .fav {
-  margin-top: 8px;
-  opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+  margin-top: var(--space-2);
+  color: var(--ink-faint);
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .bubble:hover .fav,
 .fav:focus-visible {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .fav {
-    opacity: 1;
-  }
+  color: var(--ink-soft);
 }
 
 @media (max-width: 720px) {

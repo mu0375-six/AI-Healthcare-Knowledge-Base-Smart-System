@@ -46,10 +46,22 @@
               show-password
               size="large"
               :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+              :aria-describedby="mode === 'register' ? 'password-rule' : undefined"
             />
+            <small v-if="mode === 'register'" id="password-rule" class="field-help">
+              密码至少 6 位
+            </small>
           </label>
-          <button class="btn btn-primary btn-block go" type="submit" :disabled="loading">
-            {{ loading ? (mode === 'login' ? '正在进入…' : '创建中…') : mode === 'login' ? '登录' : '注册并进入' }}
+          <button
+            class="btn btn-primary btn-cta btn-block go"
+            type="submit"
+            :disabled="loading"
+            :aria-busy="loading"
+          >
+            <span>{{ submitLabel }}</span>
+            <span class="knob" :class="{ loading }" aria-hidden="true">
+              <span v-if="!loading" v-html="ICONS.arrow"></span>
+            </span>
           </button>
         </form>
 
@@ -67,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { register } from '@/api/auth'
@@ -82,6 +94,10 @@ const router = useRouter()
 const route = useRoute()
 const loading = ref(false)
 const form = reactive({ username: '', nickname: '', password: '' })
+const submitLabel = computed(() => {
+  if (loading.value) return mode.value === 'login' ? '正在进入…' : '创建中…'
+  return mode.value === 'login' ? '登录' : '注册并进入'
+})
 
 const points: { icon: IconName; title: string; desc: string }[] = [
   { icon: 'chat', title: '有据可依的问答', desc: '答案标出引用来源，不是凭空生成' },
@@ -158,11 +174,11 @@ async function onSubmit() {
 .pitch-top {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-bottom: 32px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
   font-size: 15px;
   font-weight: 650;
-  letter-spacing: -0.018em;
+  letter-spacing: 0;
 }
 
 .pitch h2 {
@@ -189,9 +205,9 @@ async function onSubmit() {
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
-  background: var(--card);
-  border: 1px solid var(--edge);
+  border-radius: var(--r-avatar);
+  background: var(--accent-wash);
+  border: 1px solid var(--accent-line);
   color: var(--accent);
   flex-shrink: 0;
 }
@@ -249,12 +265,36 @@ async function onSubmit() {
 
 .form {
   display: grid;
-  gap: 15px;
+  gap: var(--space-4);
 }
 
 .go {
-  height: 46px;
-  margin-top: 6px;
+  min-height: 50px;
+  margin-top: var(--space-1);
+}
+
+.go .knob.loading::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid color-mix(in srgb, var(--on-accent) 45%, transparent);
+  border-top-color: var(--on-accent);
+  border-radius: var(--r-pill);
+  animation: spin 0.8s var(--ease-soft) infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.field-help {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .switch {
@@ -274,7 +314,7 @@ async function onSubmit() {
 }
 
 .link:hover {
-  text-decoration: underline;
+  color: var(--accent-hover);
 }
 
 @media (max-width: 880px) {
