@@ -31,6 +31,7 @@
     "@types/markdown-it": "^14.1.1",
     "@vitejs/plugin-vue": "^5.0.4",
     "typescript": "^5.4.3",
+    "unplugin-vue-components": "0.27.5",
     "vite": "^5.2.8",
     "vue-tsc": "^2.0.11"
   }
