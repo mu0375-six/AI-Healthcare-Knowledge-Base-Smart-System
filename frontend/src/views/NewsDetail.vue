@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <article class="article" v-reveal>
+    <article class="article">
       <button class="btn btn-quiet btn-sm back" type="button" @click="goBack">
         <span v-html="ICONS.chevron"></span>返回首页
       </button>
@@ -103,13 +103,13 @@ function goBack() {
 }
 
 .back {
-  margin-bottom: 18px;
+  margin-bottom: var(--space-5);
 }
 
 .meta {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--space-2);
   font-size: 12.5px;
   color: var(--ink-faint);
 }
@@ -128,16 +128,16 @@ function goBack() {
 }
 
 h1 {
-  margin: 14px 0 0;
+  margin: var(--space-4) 0 0;
   font-size: clamp(22px, 3.2vw, 30px);
   line-height: 1.42;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   text-wrap: balance;
 }
 
 .lede {
-  margin-top: 14px;
-  padding-left: 14px;
+  margin-top: var(--space-4);
+  padding-left: var(--space-4);
   border-left: 3px solid var(--accent-line);
   color: var(--ink-soft);
   font-size: 15px;
@@ -145,13 +145,13 @@ h1 {
 }
 
 .hero-img {
-  margin-top: 22px;
+  margin-top: var(--space-5);
   border-radius: var(--r-card);
   border: 1px solid var(--edge);
 }
 
 .body {
-  margin-top: 24px;
+  margin-top: var(--space-5);
 }
 
 .body p {
@@ -162,15 +162,15 @@ h1 {
 }
 
 .src {
-  margin-top: 26px;
-  padding-top: 16px;
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--edge);
 }
 
 .src a {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   font-size: 13.5px;
   color: var(--accent);
 }
