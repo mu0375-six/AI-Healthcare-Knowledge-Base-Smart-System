@@ -8,7 +8,7 @@
 
 | 层 | 组件 |
 | --- | --- |
-| 前端 | Vue 3 + TypeScript + Vite + Element Plus；Apple 风格设计系统（毛玻璃材质分层、弹簧曲线动效、系统字体栈，遵循 prefers-reduced-motion/transparency/contrast）；markdown-it + KaTeX；ECharts；SSE 流式对话 |
+| 前端 | Vue 3 + TypeScript + Vite + Element Plus；Editorial Luxury 设计系统（暖奶油纸面、深咖墨色、灰调鼠尾草绿、Fraunces + Geist 可变字体、Double-Bezel 同心容器与 CSS 胶片颗粒，遵循 prefers-reduced-motion/transparency/contrast）；markdown-it + KaTeX；ECharts；SSE 流式对话 |
 | 后端框架 | Spring Boot 4 + Sa-Token（JWT 模式，`StpLogicJwtForSimple`） |
 | 对话 | Spring AI 2.0 `ChatClient` 流式问答（OpenAI 兼容，默认 DeepSeek，支持图片多模态） |
 | RAG | LangChain4j 流水线编排：`DocumentSplitters` 切分 → `EmbeddingStoreContentRetriever` 检索 → `DefaultRetrievalAugmentor` |
@@ -17,6 +17,8 @@
 | 缓存 | Redis（热门问答 + 会话上下文），不可用时降级进程内 TTL 缓存 |
 | 会话存储 | Sa-Token 会话落 Redis（`sa-token-redis-template`），登录态跨后端重启保留；Redis 缺失时退回内存 |
 | 文档解析 | Apache Tika（PDF/Word/txt）、Hutool |
+
+前端把品牌色、医疗高低语义色与图表分类色严格分层：品牌色不表示状态，高低只由数据驱动；化验数字统一使用等宽字体和参考区间标尺，主信息容器使用外壳 + 内芯的同心圆角结构。
 
 ## 环境要求
 

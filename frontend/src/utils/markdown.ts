@@ -1,6 +1,7 @@
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import katex from 'katex'
+import 'katex/dist/katex.min.css'
 
 const md = new MarkdownIt({
   html: false,
