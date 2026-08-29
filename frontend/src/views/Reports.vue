@@ -1,16 +1,16 @@
 <template>
   <div class="page">
-    <header class="head">
-      <router-link class="back" :to="backTo">
-        <span v-html="ICONS.chevron"></span>返回档案
-      </router-link>
-      <p class="eyebrow">报告解读</p>
-      <h1>把化验单交给系统读一遍</h1>
-      <p class="lead">
-        多模态模型直接读图，抽出指标、判高低、逐项解读，并写进对应家人的档案。
-        识别效果不佳时，把文字贴到下面一样能解读。
-      </p>
-    </header>
+    <PageHeader
+      kicker="报告解读"
+      title="把化验单交给系统读一遍"
+      desc="多模态模型直接读图，抽出指标、判高低、逐项解读，并写进对应家人的档案。识别效果不佳时，把文字贴到下面一样能解读。"
+    >
+      <template #back>
+        <router-link class="back" :to="backTo">
+          <span v-html="ICONS.chevron"></span>返回档案
+        </router-link>
+      </template>
+    </PageHeader>
 
     <!-- 投放区是这页的主行为：虚线边框 + 拖入/已选两个明确状态 -->
     <section
@@ -22,7 +22,7 @@
     >
       <span class="drop-ico" v-html="file ? ICONS.check : ICONS.upload"></span>
 
-      <h3>{{ file ? file.name : '把报告拖到这里' }}</h3>
+      <h2 class="drop-title">{{ file ? file.name : '把报告拖到这里' }}</h2>
       <p v-if="file" class="picked">
         <span class="num">{{ fileSize(file.size) }}</span> · {{ kindLabel(file.name) }} · 已就绪
         <button type="button" class="link" @click="file = null">换一份</button>
@@ -49,37 +49,44 @@
       </div>
     </section>
 
-    <section class="panel core-pad opts">
-      <label class="field">
-        <span>写入哪份档案</span>
-        <el-select v-model="profileId" clearable placeholder="可选 —— 不选则只做解读，不写入" style="width: 100%">
-          <el-option
-            v-for="p in profiles"
-            :key="p.id"
-            :label="(p.displayName || '档案') + (p.relation ? ' · ' + p.relation : '')"
-            :value="p.id"
-          />
-        </el-select>
-      </label>
+    <Shell>
+      <div class="opts">
+        <label class="field">
+          <span>写入哪份档案</span>
+          <el-select v-model="profileId" clearable placeholder="可选 —— 不选则只做解读，不写入" style="width: 100%">
+            <el-option
+              v-for="p in profiles"
+              :key="p.id"
+              :label="(p.displayName || '档案') + (p.relation ? ' · ' + p.relation : '')"
+              :value="p.id"
+            />
+          </el-select>
+        </label>
 
-      <label class="field">
-        <span>报告文字（可选，图片识别不佳时兜底）</span>
-        <el-input v-model="extracted" type="textarea" :rows="4" placeholder="把化验单上的文字粘贴到这里" />
-      </label>
+        <label class="field">
+          <span>报告文字（可选，图片识别不佳时兜底）</span>
+          <el-input v-model="extracted" type="textarea" :rows="4" placeholder="把化验单上的文字粘贴到这里" />
+        </label>
 
-      <button class="btn btn-primary btn-block go" type="button" :disabled="!file || uploading" @click="doUpload">
-        {{ uploading ? '解读中…' : '上传并解读' }}
-        <span v-if="!uploading" v-html="ICONS.arrow"></span>
-      </button>
-      <p v-if="uploading" class="quiet">正在识别与逐项解读，通常十几秒。</p>
-    </section>
+        <button class="btn btn-primary btn-cta btn-block go" type="button" :disabled="!file || uploading" @click="doUpload">
+          {{ uploading ? '正在解读' : '上传并解读' }}
+          <span class="knob" v-html="uploading ? ICONS.clock : ICONS.arrow"></span>
+        </button>
+        <ol v-if="uploading" class="upload-stages" aria-live="polite">
+          <li v-for="(stage, i) in UPLOAD_STAGES" :key="stage" :class="{ done: i < uploadStage, active: i === uploadStage }">
+            <span class="stage-mark"><span v-if="i < uploadStage" v-html="ICONS.check"></span><template v-else>{{ i + 1 }}</template></span>
+            {{ stage }}
+          </li>
+        </ol>
+      </div>
+    </Shell>
 
     <MedicalDisclaimer />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { uploadReport } from '@/api/reports'
@@ -87,6 +94,8 @@ import { listProfiles } from '@/api/health'
 import type { HealthProfile } from '@/api/types'
 import { ICONS } from '@/utils/icons'
 import MedicalDisclaimer from '@/components/MedicalDisclaimer.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import Shell from '@/components/Shell.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -96,6 +105,9 @@ const uploading = ref(false)
 const profiles = ref<HealthProfile[]>([])
 const profileId = ref<number | undefined>(undefined)
 const dragging = ref(false)
+const uploadStage = ref(0)
+const UPLOAD_STAGES = ['识别报告内容', '提取指标与参考区间', '生成逐项解读'] as const
+let stageTimers: number[] = []
 
 // 每一页都要有回头路：带上来时的档案 id，返回时还落在同一份档案
 const backTo = computed(() => ({
@@ -145,33 +157,49 @@ function onDrop(e: DragEvent) {
 async function doUpload() {
   if (!file.value) return
   uploading.value = true
+  startStages()
   try {
     const res = await uploadReport(file.value, extracted.value, profileId.value)
     ElMessage.success(profileId.value ? '解读完成，指标已写入档案' : '解读完成')
     router.push(`/reports/${res.data.report.id}`)
   } finally {
+    clearStages()
     uploading.value = false
   }
 }
+
+function startStages() {
+  clearStages()
+  uploadStage.value = 0
+  stageTimers = [
+    window.setTimeout(() => (uploadStage.value = 1), 1800),
+    window.setTimeout(() => (uploadStage.value = 2), 5200),
+  ]
+}
+
+function clearStages() {
+  stageTimers.forEach((timer) => window.clearTimeout(timer))
+  stageTimers = []
+}
+
+onBeforeUnmount(clearStages)
 </script>
 
 <style scoped>
 .page {
   max-width: 660px;
   display: grid;
-  gap: 18px;
+  gap: var(--space-5);
 }
 
-.head h1 {
-  margin: 4px 0 10px;
-  max-width: 9em;
+.page :deep(.head) {
+  margin-bottom: 0;
 }
 
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  margin-bottom: 14px;
+  gap: var(--space-1);
   font-size: 13px;
   font-weight: 550;
   color: var(--ink-mute);
@@ -191,18 +219,12 @@ async function doUpload() {
   }
 }
 
-.lead {
-  color: var(--ink-mute);
-  line-height: 1.75;
-  max-width: 26em;
-}
-
 /* ---- 投放区 ---- */
 .drop {
   display: grid;
   justify-items: center;
   text-align: center;
-  padding: 34px 24px 28px;
+  padding: var(--space-6) var(--space-5);
   border: 1.5px dashed var(--edge-strong);
   border-radius: var(--r-shell);
   background: var(--paper-2);
@@ -223,7 +245,7 @@ async function doUpload() {
 
 .drop-ico {
   color: var(--ink-faint);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .drop.ready .drop-ico {
@@ -236,7 +258,8 @@ async function doUpload() {
   display: block;
 }
 
-.drop h3 {
+.drop-title {
+  font-family: var(--font);
   font-size: 19px;
   word-break: break-all;
   max-width: 17em;
@@ -267,33 +290,71 @@ async function doUpload() {
   cursor: pointer;
 }
 
-.link:hover {
-  text-decoration: underline;
-}
-
 .picks {
   display: flex;
-  gap: 10px;
+  gap: var(--space-3);
   flex-wrap: wrap;
   justify-content: center;
-  margin-top: 18px;
+  margin-top: var(--space-5);
 }
 
 /* ---- 选项 ---- */
 .opts {
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .go {
-  margin-top: 2px;
+  margin-top: var(--space-1);
+}
+
+.upload-stages {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.upload-stages li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.upload-stages li.active {
+  color: var(--accent);
+}
+
+.upload-stages li.done {
+  color: var(--flag-normal);
+}
+
+.stage-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border: 1px solid currentColor;
+  border-radius: var(--r-pill);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.stage-mark :deep(svg) {
+  width: 14px;
+  height: 14px;
 }
 
 @media (max-width: 720px) {
   .drop {
-    padding: 24px 16px 20px;
+    padding: var(--space-5) var(--space-4);
   }
-  .drop h3 {
+  .drop-title {
     font-size: 17px;
   }
   .picks {
@@ -301,6 +362,9 @@ async function doUpload() {
   }
   .picks .btn {
     flex: 1;
+  }
+  .upload-stages {
+    grid-template-columns: 1fr;
   }
 }
 </style>

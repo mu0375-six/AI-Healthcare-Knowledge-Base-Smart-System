@@ -1,10 +1,6 @@
 <template>
   <div class="page">
-    <header class="head">
-      <p class="eyebrow">我的收藏</p>
-      <h1>钉下来的回答</h1>
-      <p class="lead">在问诊里点「收藏该回答」，有用的解释就会留在这里。</p>
-    </header>
+    <PageHeader kicker="我的收藏" title="钉下来的回答" desc="在问诊里点「收藏该回答」，有用的解释就会留在这里。" />
 
     <div v-if="loading && !items.length" class="stack">
       <div v-for="n in 3" :key="n" class="skeleton" style="height: 128px; border-radius: var(--r-card)"></div>
@@ -17,15 +13,17 @@
       <router-link class="btn btn-primary" to="/chat">去问诊</router-link>
     </div>
 
-    <article v-for="it in items" :key="it.id" class="clip">
-      <div class="meta">
-        <time>{{ formatWhen(it.createdAt) }}</time>
-        <button class="btn btn-quiet btn-sm" type="button" @click="remove(it.id)">
-          <span v-html="ICONS.trash"></span>取消收藏
-        </button>
-      </div>
-      <div class="prose" v-html="renderMarkdown(it.content, terms)"></div>
-    </article>
+    <Shell v-for="it in items" :key="it.id">
+      <article class="clip">
+        <div class="meta">
+          <time>{{ formatWhen(it.createdAt) }}</time>
+          <button class="btn btn-quiet btn-sm" type="button" @click="remove(it.id)">
+            <span v-html="ICONS.trash"></span>取消收藏
+          </button>
+        </div>
+        <div class="prose" v-html="renderMarkdown(it.content, terms)"></div>
+      </article>
+    </Shell>
 
     <el-pagination
       v-if="total > pageSize"
@@ -45,6 +43,8 @@ import { renderMarkdown } from '@/utils/markdown'
 import { formatWhen } from '@/utils/format'
 import { useTerms } from '@/composables/useTerms'
 import { ICONS } from '@/utils/icons'
+import PageHeader from '@/components/PageHeader.vue'
+import Shell from '@/components/Shell.vue'
 
 const items = ref<FavoriteItem[]>([])
 const total = ref(0)
@@ -85,32 +85,24 @@ async function remove(id: number) {
 .page {
   max-width: 780px;
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
-.head h1 {
-  margin: 4px 0 8px;
-}
-
-.lead {
-  color: var(--ink-mute);
+.page :deep(.head) {
+  margin-bottom: var(--space-2);
 }
 
 /* 收藏卡：左侧一条主色细条，长文段落之间有明确的起始边界 */
 .clip {
-  background: var(--card);
-  border: 1px solid var(--edge);
   border-left: 3px solid var(--accent);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-1), var(--inner-light);
-  padding: 16px 20px;
+  padding-left: var(--space-4);
 }
 
 .meta {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 
 .meta time {
@@ -125,7 +117,7 @@ async function remove(id: number) {
 
 @media (max-width: 720px) {
   .clip {
-    padding: 14px 16px;
+    padding-left: var(--space-3);
   }
 }
 </style>
