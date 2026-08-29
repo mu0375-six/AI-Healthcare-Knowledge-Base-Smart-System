@@ -1,14 +1,12 @@
 <template>
   <svg class="mark" viewBox="0 0 36 36" aria-hidden="true" focusable="false">
-    <!-- 圆角方章：像盖在纸上的一枚印，与 Editorial Luxury 的纸质语境一致。
-         不用渐变 —— 蓝紫渐变正是要避开的 AI 指纹。 -->
-    <rect width="36" height="36" rx="10" fill="var(--accent)" />
+    <rect width="36" height="36" rx="7" fill="var(--accent)" />
     <rect
       x="0.5"
       y="0.5"
       width="35"
       height="35"
-      rx="9.5"
+      rx="6.5"
       fill="none"
       stroke="var(--on-accent)"
       stroke-opacity="0.16"
@@ -32,8 +30,8 @@ defineProps<{ tone?: 'dark' | 'light' }>()
 
 <style scoped>
 .mark {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   display: block;
   flex-shrink: 0;
 }

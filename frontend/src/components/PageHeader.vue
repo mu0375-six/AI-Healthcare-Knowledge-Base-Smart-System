@@ -22,7 +22,21 @@ defineProps<{ title: string; desc?: string; kicker?: string }>()
 
 <style scoped>
 .head {
-  margin-bottom: var(--space-5);
+  position: relative;
+  margin-bottom: 20px;
+  padding: 2px 0 18px 14px;
+  border-bottom: 1px solid var(--edge);
+}
+
+.head::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 18px;
+  width: 3px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
 }
 
 .back {
@@ -31,7 +45,7 @@ defineProps<{ title: string; desc?: string; kicker?: string }>()
 
 .row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
 }
@@ -41,15 +55,16 @@ defineProps<{ title: string; desc?: string; kicker?: string }>()
 }
 
 .lead h1 {
-  margin-top: var(--space-1);
+  margin-top: 6px;
+  font-size: clamp(27px, 3vw, 36px);
 }
 
 .desc {
-  margin-top: var(--space-3);
+  margin-top: var(--space-2);
   color: var(--ink-mute);
   font-size: 14px;
-  line-height: 1.7;
-  max-width: 32em;
+  line-height: 1.55;
+  max-width: 46em;
 }
 
 .extra {
@@ -60,6 +75,10 @@ defineProps<{ title: string; desc?: string; kicker?: string }>()
 }
 
 @media (max-width: 720px) {
+  .head {
+    padding-left: 11px;
+  }
+
   .row {
     flex-direction: column;
     align-items: stretch;

@@ -7,10 +7,14 @@
     <aside id="primary-navigation" class="rail" :class="{ open: railOpen }">
       <router-link to="/home" class="brand" @click="railOpen = false">
         <BrandMark />
-        <span class="brand-name">康识问诊</span>
+        <span class="brand-copy">
+          <span class="brand-name">康识问诊</span>
+          <small>Clinical workspace</small>
+        </span>
       </router-link>
 
       <nav class="rail-nav" aria-label="主导航">
+        <p class="rail-label">工作区</p>
         <router-link
           v-for="item in PRIMARY"
           :key="item.to"
@@ -22,7 +26,7 @@
           <span>{{ item.label }}</span>
         </router-link>
 
-        <p class="rail-label">更多</p>
+        <p class="rail-label">工具</p>
         <router-link
           v-for="item in secondary"
           :key="item.to"
@@ -65,6 +69,8 @@
           <span></span><span></span>
         </button>
         <nav class="breadcrumbs" aria-label="面包屑">
+          <span class="workspace-label">健康工作台</span>
+          <span class="crumb-separator" aria-hidden="true">/</span>
           <template v-for="(crumb, index) in breadcrumbs" :key="crumb.label">
             <span v-if="index" class="crumb-separator" aria-hidden="true">/</span>
             <router-link v-if="crumb.to" class="crumb-link" :to="crumb.to">{{ crumb.label }}</router-link>
@@ -280,7 +286,8 @@ function onCommand(cmd: string) {
 .shell-root {
   min-height: 100dvh;
   display: grid;
-  grid-template-columns: 236px 1fr;
+  grid-template-columns: 228px minmax(0, 1fr);
+  background: var(--paper);
 }
 
 /* ---- 左侧常驻栏 ---- */
@@ -290,29 +297,44 @@ function onCommand(cmd: string) {
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  padding: var(--space-4) 14px;
-  background: var(--paper-2);
-  border-right: 1px solid var(--edge);
+  padding: 18px 12px 14px;
+  background: var(--nav-bg);
+  border-right: 1px solid var(--nav-border);
+  color: var(--nav-ink);
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-1) var(--space-2) var(--space-5);
-  color: var(--ink);
-  transition: transform 0.4s var(--ease);
+  padding: 0 var(--space-2) 20px;
+  color: var(--nav-ink);
+  border-bottom: 1px solid var(--nav-border);
+  transition: opacity 0.16s var(--ease-soft);
 }
 
 .brand:active {
-  transform: scale(0.97);
+  opacity: 0.72;
+}
+
+.brand-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
 }
 
 .brand-name {
-  font-family: var(--font-display);
-  font-size: 19px;
-  font-weight: 600;
+  font-family: var(--font);
+  font-size: 16px;
+  font-weight: 680;
   letter-spacing: 0;
+}
+
+.brand-copy small {
+  color: var(--nav-mute);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .rail-nav {
@@ -321,49 +343,53 @@ function onCommand(cmd: string) {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  margin: 0 calc(var(--space-1) * -1);
-  padding: 0 var(--space-1);
+  gap: 2px;
+  margin-top: var(--space-3);
+  padding: 0;
 }
 
 .rail-label {
-  margin: var(--space-5) var(--space-3) var(--space-2);
-  font-size: 10px;
-  font-weight: 600;
+  margin: var(--space-4) var(--space-3) 6px;
+  font-size: 9px;
+  font-weight: 650;
   letter-spacing: 0;
   text-transform: uppercase;
-  color: var(--ink-faint);
+  color: var(--nav-mute);
+}
+
+.rail-label:first-child {
+  margin-top: var(--space-1);
 }
 
 .rail-item {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  min-height: 40px;
+  padding: 8px 11px;
   border-radius: var(--r-control);
-  color: var(--ink-soft);
-  font-size: 14px;
-  font-weight: 500;
-  transition: background 0.4s var(--ease), color 0.3s var(--ease-soft),
-    transform 0.4s var(--ease);
+  color: var(--nav-mute);
+  font-size: 13.5px;
+  font-weight: 520;
+  transition: background 0.16s var(--ease-soft), color 0.16s var(--ease-soft);
 }
 
 .rail-item:active {
-  transform: scale(0.985);
+  background: rgba(255, 255, 255, 0.13);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .rail-item:hover {
-    background: var(--tray);
-    color: var(--ink);
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--nav-ink);
   }
 }
 
-/* 当前位置：主色实底。左栏里实底比下划线更明确 */
 .rail-item.router-link-active {
-  background: var(--accent);
-  color: var(--on-accent);
-  font-weight: 550;
+  background: rgba(74, 195, 154, 0.14);
+  color: #ffffff;
+  box-shadow: inset 3px 0 var(--nav-active);
+  font-weight: 620;
 }
 
 .rail-ico {
@@ -382,17 +408,18 @@ function onCommand(cmd: string) {
 /* 侧栏底部引导卡 */
 .rail-card {
   margin-top: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--r-card);
-  background: var(--card);
-  border: 1px solid var(--edge);
-  box-shadow: var(--inner-light);
+  padding: 13px;
+  border-radius: var(--r-control);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid var(--nav-border);
+  box-shadow: none;
 }
 
 .rail-card b {
   display: block;
-  font-size: 13.5px;
-  font-weight: 600;
+  color: var(--nav-ink);
+  font-size: 12.5px;
+  font-weight: 650;
 }
 
 .rail-card i {
@@ -400,7 +427,7 @@ function onCommand(cmd: string) {
   font-style: normal;
   font-size: 12px;
   line-height: 1.6;
-  color: var(--ink-mute);
+  color: var(--nav-mute);
   margin: var(--space-1) 0 var(--space-3);
 }
 
@@ -409,6 +436,7 @@ function onCommand(cmd: string) {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  background: var(--paper);
 }
 
 .topbar {
@@ -421,8 +449,8 @@ function onCommand(cmd: string) {
   gap: var(--space-3);
   padding: 0 var(--main-pad);
   background: var(--chrome);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--edge);
 }
 
@@ -431,10 +459,17 @@ function onCommand(cmd: string) {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 14px;
+  font-size: 13px;
   color: var(--ink-mute);
   white-space: nowrap;
   overflow: hidden;
+}
+
+.workspace-label {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 .crumb-link {
@@ -456,19 +491,22 @@ function onCommand(cmd: string) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 600;
+  color: var(--ink);
+  font-weight: 650;
 }
 
 .top-end {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   flex-shrink: 0;
 }
 
 .top-action {
-  color: var(--ink-mute);
+  border: 1px solid var(--edge);
+  color: var(--ink-soft);
+  background: var(--card);
 }
 
 .top-action-icon {
@@ -484,19 +522,18 @@ function onCommand(cmd: string) {
 .icon-btn {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border: 0;
-  background: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--edge);
+  background: var(--card);
   color: var(--ink-mute);
   cursor: pointer;
-  border-radius: var(--r-pill);
-  transition: color 0.3s var(--ease-soft), background 0.4s var(--ease),
-    transform 0.4s var(--ease);
+  border-radius: var(--r-control);
+  transition: color 0.16s var(--ease-soft), background 0.16s var(--ease-soft);
 }
 
 .icon-btn:active {
-  transform: scale(0.9);
+  background: var(--sunk);
 }
 
 .icon-btn :deep(svg) {
@@ -515,17 +552,17 @@ function onCommand(cmd: string) {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  border: 0;
-  background: none;
+  border: 1px solid var(--edge);
+  background: var(--card);
   cursor: pointer;
-  padding: 3px 12px 3px 3px;
-  border-radius: var(--r-pill);
+  padding: 3px 10px 3px 3px;
+  border-radius: var(--r-control);
   color: var(--ink-soft);
-  transition: background 0.4s var(--ease), transform 0.4s var(--ease);
+  transition: background 0.16s var(--ease-soft), border-color 0.16s var(--ease-soft);
 }
 
 .who:active {
-  transform: scale(0.97);
+  background: var(--sunk);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -537,7 +574,7 @@ function onCommand(cmd: string) {
 .avatar {
   width: 30px;
   height: 30px;
-  border-radius: var(--r-avatar);
+  border-radius: 4px;
   background: var(--accent);
   color: var(--on-accent);
   font-size: 13px;
@@ -575,7 +612,7 @@ function onCommand(cmd: string) {
 .main {
   flex: 1;
   min-height: 0;
-  padding: var(--space-5) var(--main-pad) var(--space-7);
+  padding: 26px var(--main-pad) var(--space-7);
 }
 
 .main-fill {

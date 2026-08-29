@@ -6,9 +6,11 @@
       <aside class="pitch">
         <div class="pitch-top">
           <BrandMark />
-          <span>康识问诊</span>
+          <span><b>康识问诊</b><small>Clinical workspace</small></span>
         </div>
-        <h2>看得懂的<br />健康解释</h2>
+        <p class="pitch-kicker">个人健康信息工作台</p>
+        <h2>把零散健康信息<br />整理成清晰线索。</h2>
+        <p class="pitch-desc">从一次提问到一份长期档案，让检查结果、症状和建议保持在同一条时间线上。</p>
         <ul class="points">
           <li v-for="p in points" :key="p.title">
             <span class="p-ico" v-html="ICONS[p.icon]"></span>
@@ -23,6 +25,10 @@
 
       <div class="box">
         <BrandMark class="mobile-logo" />
+        <div class="auth-tabs" role="tablist" aria-label="账号入口">
+          <button type="button" role="tab" :aria-selected="mode === 'login'" :class="{ active: mode === 'login' }" @click="switchMode('login')">登录</button>
+          <button type="button" role="tab" :aria-selected="mode === 'register'" :class="{ active: mode === 'register' }" @click="switchMode('register')">注册</button>
+        </div>
         <p class="eyebrow">{{ mode === 'login' ? '欢迎回来' : '开始使用' }}</p>
         <h1>{{ mode === 'login' ? '登录' : '创建账号' }}</h1>
         <p class="sub">
@@ -65,14 +71,7 @@
           </button>
         </form>
 
-        <p class="switch">
-          <template v-if="mode === 'login'">
-            还没有账号？<button type="button" class="link" @click="switchMode('register')">创建一个</button>
-          </template>
-          <template v-else>
-            已有账号？<button type="button" class="link" @click="switchMode('login')">返回登录</button>
-          </template>
-        </p>
+        <p class="switch">{{ mode === 'login' ? '使用你的账号继续' : '创建后将自动登录' }}</p>
       </div>
     </div>
   </div>
@@ -118,6 +117,7 @@ function switchMode(m: 'login' | 'register') {
 }
 
 async function onSubmit() {
+  if (loading.value) return
   if (!form.username.trim() || !form.password) {
     ElMessage.warning('请输入用户名和密码')
     return
@@ -146,27 +146,27 @@ async function onSubmit() {
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 32px 20px;
+  padding: 28px;
   background: var(--paper);
 }
 
 .shell {
-  width: min(940px, 100%);
+  width: min(1040px, 100%);
+  min-height: 640px;
   display: grid;
-  grid-template-columns: 1.02fr 1fr;
+  grid-template-columns: 1.12fr 0.88fr;
   background: var(--card);
   border: 1px solid var(--edge);
   border-radius: var(--r-shell);
-  box-shadow: var(--shadow-4);
+  box-shadow: var(--shadow-3);
   overflow: hidden;
 }
 
-/* 左栏用同色系更深一档，而不是突然跳到近黑 ——
-   浅色页面里插一块纯黑会像复制粘贴事故。 */
 .pitch {
-  padding: 40px 36px;
-  background: var(--sunk);
-  border-right: 1px solid var(--edge);
+  padding: 42px;
+  background: var(--nav-bg);
+  color: var(--nav-ink);
+  border-right: 1px solid var(--nav-border);
   display: flex;
   flex-direction: column;
 }
@@ -175,15 +175,47 @@ async function onSubmit() {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-6);
-  font-size: 15px;
-  font-weight: 650;
+  margin-bottom: 64px;
+  font-size: 14px;
   letter-spacing: 0;
 }
 
+.pitch-top > span {
+  display: grid;
+  gap: 1px;
+}
+
+.pitch-top b {
+  font-weight: 680;
+}
+
+.pitch-top small {
+  color: var(--nav-mute);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pitch-kicker {
+  margin-bottom: 12px;
+  color: var(--nav-active);
+  font-size: 11px;
+  font-weight: 650;
+}
+
 .pitch h2 {
-  margin-bottom: 26px;
-  line-height: 1.2;
+  color: var(--nav-ink);
+  margin-bottom: var(--space-4);
+  font-size: clamp(30px, 3.6vw, 44px);
+  line-height: 1.16;
+}
+
+.pitch-desc {
+  max-width: 36em;
+  margin-bottom: 36px;
+  color: var(--nav-mute);
+  font-size: 13px;
+  line-height: 1.75;
 }
 
 .points {
@@ -191,13 +223,15 @@ async function onSubmit() {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--space-5);
+  gap: 0;
 }
 
 .points li {
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 14px 0;
+  border-top: 1px solid var(--nav-border);
 }
 
 .p-ico {
@@ -205,10 +239,10 @@ async function onSubmit() {
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: var(--r-avatar);
-  background: var(--accent-wash);
-  border: 1px solid var(--accent-line);
-  color: var(--accent);
+  border-radius: var(--r-control);
+  background: rgba(74, 195, 154, 0.13);
+  border: 1px solid rgba(74, 195, 154, 0.24);
+  color: var(--nav-active);
   flex-shrink: 0;
 }
 
@@ -220,8 +254,9 @@ async function onSubmit() {
 
 .points b {
   display: block;
-  font-size: 14px;
-  font-weight: 600;
+  color: var(--nav-ink);
+  font-size: 13px;
+  font-weight: 620;
 }
 
 .points i {
@@ -229,7 +264,7 @@ async function onSubmit() {
   font-style: normal;
   font-size: 12.5px;
   line-height: 1.6;
-  color: var(--ink-mute);
+  color: var(--nav-mute);
   margin-top: 2px;
 }
 
@@ -238,14 +273,48 @@ async function onSubmit() {
   padding-top: 28px;
   font-size: 11.5px;
   line-height: 1.7;
-  color: var(--ink-faint);
+  color: var(--nav-mute);
 }
 
 .box {
-  padding: 44px 40px;
+  padding: 50px 46px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+.box > .eyebrow {
+  align-self: flex-start;
+}
+
+.auth-tabs {
+  align-self: flex-start;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 168px;
+  margin-bottom: 42px;
+  padding: 3px;
+  border-radius: var(--r-control);
+  background: var(--sunk);
+  border: 1px solid var(--edge);
+}
+
+.auth-tabs button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-tabs button.active {
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
 }
 
 .mobile-logo {
@@ -254,11 +323,12 @@ async function onSubmit() {
 }
 
 .box h1 {
-  margin: 6px 0 8px;
+  margin: 8px 0;
+  font-size: 34px;
 }
 
 .sub {
-  margin-bottom: 26px;
+  margin-bottom: 30px;
   color: var(--ink-mute);
   line-height: 1.65;
 }
@@ -269,7 +339,7 @@ async function onSubmit() {
 }
 
 .go {
-  min-height: 50px;
+  min-height: 46px;
   margin-top: var(--space-1);
 }
 
@@ -298,29 +368,16 @@ async function onSubmit() {
 }
 
 .switch {
-  margin-top: 20px;
-  color: var(--ink-mute);
-  font-size: 14px;
-}
-
-.link {
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--accent);
-  font-size: 14px;
-  font-weight: 550;
-  cursor: pointer;
-}
-
-.link:hover {
-  color: var(--accent-hover);
+  margin-top: var(--space-4);
+  color: var(--ink-faint);
+  font-size: 12px;
 }
 
 @media (max-width: 880px) {
   .shell {
     grid-template-columns: 1fr;
-    box-shadow: var(--shadow-3);
+    min-height: auto;
+    box-shadow: var(--shadow-2);
   }
   .pitch {
     display: none;
@@ -330,6 +387,10 @@ async function onSubmit() {
   }
   .box {
     padding: 32px 24px;
+  }
+
+  .auth-tabs {
+    margin-bottom: var(--space-6);
   }
 }
 </style>
