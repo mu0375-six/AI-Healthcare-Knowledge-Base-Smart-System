@@ -1,266 +1,249 @@
 <template>
   <div class="page">
-<!-- 两栏：主栏收窄，右侧是可滚动的健康新闻流。
-         新闻来自权威机构（启动时由后端爬取），点开是站内详情页。
-         英雄区也收进主栏 —— 右栏从页面顶部就位，不留一段空白的右上角。 -->
-    <div class="home-grid">
-    <div class="main-col">
-    <!-- Hero 是一句论断，不是一个问句。
-         论断的依据来自这个产品世界里最核心的器物：化验单的参考线。
-         有指标越线时，标题直接说出越了几项；没有时，说出"都在线内"。 -->
-    <header class="hero">
-      <span class="eyebrow">
-        <span v-html="ICONS.pulse"></span>
-        {{ today }}
-      </span>
-
-      <h1 v-if="alerts.length">
-        {{ cn(alerts.length) }}项指标<br />
-        <em>越过了参考线。</em>
-      </h1>
-      <h1 v-else-if="hasAnyData">
-        所有指标<br />
-        <em>都在参考线内。</em>
-      </h1>
-      <h1 v-else>
-        先把一张化验单<br />
-        <em>交给它读一遍。</em>
-      </h1>
-
-      <p class="thesis">
-        {{
-          alerts.length
-            ? '越线不等于生病。下面每一条都标出了它离参考区间有多远，以及这通常意味着什么。'
-            : hasAnyData
-              ? '继续记录才看得出走势 —— 单次正常说明不了长期趋势。'
-              : '拍一张照，指标、高低、逐项解释会自动整理成一份档案。'
-        }}
-      </p>
-
-      <div class="hero-acts">
-        <button class="btn btn-primary btn-cta" type="button" @click="goAsk">
-          {{ alerts.length ? '问问这意味着什么' : '开始一次问诊' }}
-          <span class="knob" v-html="ICONS.arrow"></span>
+    <header class="workspace-head">
+      <div class="workspace-copy">
+        <span class="eyebrow"><span v-html="ICONS.pulse"></span>{{ today }}</span>
+        <h1>今日健康工作台</h1>
+        <p class="status-copy">
+          <strong v-if="alerts.length">{{ alerts.length }} 项指标需要留意</strong>
+          <strong v-else-if="hasAnyData">当前记录没有越过参考线</strong>
+          <strong v-else>还没有可分析的健康记录</strong>
+          <span>
+            {{
+              alerts.length
+                ? '先查看偏离最明显的指标，再决定是否继续问诊。'
+                : hasAnyData
+                  ? '持续记录比单次结果更能说明变化。'
+                  : '上传报告或记录指标，建立第一份可追踪档案。'
+            }}
+          </span>
+        </p>
+      </div>
+      <div class="workspace-actions">
+        <button class="btn btn-primary" type="button" @click="goAsk">
+          <span v-html="ICONS.send"></span>开始问诊
         </button>
         <router-link class="btn btn-ghost" to="/reports/upload">
-          <span v-html="ICONS.camera"></span>读一张化验单
+          <span v-html="ICONS.camera"></span>上传报告
         </router-link>
       </div>
     </header>
 
-<!-- 快捷入口：一整行圆形图标，横向铺满。
-         这是这个产品能做的全部动作，摆出来比藏进菜单强。 -->
-    <nav class="quick" aria-label="快捷入口">
-      <button v-for="a in QUICK" :key="a.label" class="q" type="button" @click="router.push(a.to)">
-        <span class="q-ico" :style="{ background: a.bg, color: a.fg }" v-html="ICONS[a.icon]"></span>
-        <span>{{ a.label }}</span>
-      </button>
-    </nav>
-
-    <div class="bento">
-      <!-- 提问：主行为，占七列 -->
-      <Shell class="b7">
-        <div class="ask">
-          <div class="section-head">
-            <h3>说说哪里不舒服</h3>
-            <span class="count">回答会标出知识库出处</span>
-          </div>
-          <form class="ask-form" @submit.prevent="goAsk">
-            <input v-model="q" aria-label="描述你的问题" placeholder="嗓子痛第三天了，还要不要去医院" />
-            <button class="btn btn-primary btn-sm" type="submit" aria-label="发送">
-              <span v-html="ICONS.send"></span>
-            </button>
-          </form>
-          <div class="seeds">
-            <button v-for="s in suggests" :key="s" class="chip-btn" type="button" @click="ask(s)">{{ s }}</button>
-          </div>
+    <section class="command-center" aria-label="快速开始">
+      <div class="ask-block">
+        <div class="command-label">
+          <span>智能问诊</span>
+          <small>回答附知识来源</small>
         </div>
-      </Shell>
-
-      <!-- 最该看的那一项：越线最远的指标，大号标尺 -->
-      <Shell class="b5">
-        <div class="focus">
-          <div class="section-head">
-            <h3>{{ headline ? '最该看的一项' : '还没有指标' }}</h3>
-            <router-link v-if="headline" class="spacer btn btn-quiet btn-sm" to="/health">全部</router-link>
-          </div>
-
-          <template v-if="loading">
-            <div class="skeleton" style="height: 96px; border-radius: var(--r-card)"></div>
-          </template>
-
-          <template v-else-if="headline">
-            <LabStrip
-              :type="headline.metricType"
-              :value="Number(headline.metricValue)"
-              :unit="headline.unit"
-            />
-            <p class="focus-who">
-              {{ headline.profileName }} · <time>{{ headline.recordedAt }}</time>
-            </p>
-          </template>
-
-          <p v-else class="quiet">
-            记一次血压或血糖，或者传一张化验单，这里会显示离参考线最远的那一项。
-          </p>
-        </div>
-      </Shell>
-
-      <!-- 其余越线项 -->
-      <section v-if="rest.length" class="b12" v-reveal="60">
-        <div class="section-head">
-          <h3>其余越线的指标</h3>
-          <span class="count num">{{ rest.length }}</span>
-        </div>
-        <div class="rest">
-          <button
-            v-for="a in rest"
-            :key="a.metricId"
-            class="tile rest-card"
-            type="button"
-            @click="router.push('/health?id=' + (a.profileId ?? ''))"
-          >
-            <LabStrip
-              :type="a.metricType"
-              :value="Number(a.metricValue)"
-              :unit="a.unit"
-              compact
-            />
-            <span class="rest-foot">
-              <span class="chip" :class="a.flag">{{ a.flag === 'high' ? '偏高' : '偏低' }}</span>
-              <span>{{ a.profileName }}</span>
-            </span>
+        <form class="ask-form" @submit.prevent="goAsk">
+          <input v-model="q" aria-label="描述你的健康问题" placeholder="描述症状、持续时间和已有检查结果" />
+          <button class="ask-send" type="submit" aria-label="发送问题">
+            <span v-html="ICONS.arrow"></span>
           </button>
+        </form>
+        <div class="seeds" aria-label="常见问题">
+          <button v-for="s in suggests" :key="s" type="button" @click="ask(s)">{{ s }}</button>
         </div>
-      </section>
+      </div>
 
-      <!-- 趋势：八列，图表最吃宽度 -->
-      <Shell v-if="series.length" class="b12" v-reveal>
-        <div>
-          <div class="section-head">
-            <h3>这些天的走势</h3>
-            <router-link class="spacer btn btn-quiet btn-sm" to="/health">全部指标</router-link>
+      <nav class="quick" aria-label="健康工具">
+        <button v-for="a in QUICK" :key="a.label" type="button" @click="router.push(a.to)">
+          <span
+            class="q-ico"
+            :style="{ background: a.bg, color: a.fg }"
+            v-html="ICONS[a.icon]"
+          ></span>
+          <span class="q-copy"><b>{{ a.label }}</b><small>{{ a.hint }}</small></span>
+          <span class="q-arrow" v-html="ICONS.arrow"></span>
+        </button>
+      </nav>
+    </section>
+
+    <dl class="overview-strip" aria-label="账户健康数据概览">
+      <div><dt>家庭成员</dt><dd class="num">{{ overview.profileCount }}</dd></div>
+      <div><dt>健康指标</dt><dd class="num">{{ overview.metricCount }}</dd></div>
+      <div><dt>解读报告</dt><dd class="num">{{ overview.reportCount }}</dd></div>
+      <div><dt>问诊记录</dt><dd class="num">{{ overview.sessionCount }}</dd></div>
+    </dl>
+
+    <div class="workspace-grid">
+      <main class="clinical-board">
+        <section class="board-section attention">
+          <div class="section-title">
+            <div>
+              <span class="section-index">01</span>
+              <h2>重点指标</h2>
+            </div>
+            <router-link class="text-link" to="/health">
+              查看全部<span v-html="ICONS.arrow"></span>
+            </router-link>
+          </div>
+
+          <div v-if="loading" class="skeleton focus-skeleton"></div>
+          <template v-else-if="headline">
+            <div class="focus-row">
+              <div class="focus-summary">
+                <span class="signal" :class="headline.flag">
+                  {{ headline.flag === 'high' ? '偏高' : '偏低' }}
+                </span>
+                <p>当前偏离参考区间最明显</p>
+                <small>{{ headline.profileName }} · {{ headline.recordedAt }}</small>
+              </div>
+              <div class="focus-strip">
+                <LabStrip
+                  :type="headline.metricType"
+                  :value="Number(headline.metricValue)"
+                  :unit="headline.unit"
+                />
+              </div>
+            </div>
+
+            <div v-if="rest.length" class="rest-list">
+              <button
+                v-for="a in rest"
+                :key="a.metricId"
+                type="button"
+                @click="router.push('/health?id=' + (a.profileId ?? ''))"
+              >
+                <LabStrip
+                  :type="a.metricType"
+                  :value="Number(a.metricValue)"
+                  :unit="a.unit"
+                  compact
+                />
+                <span class="rest-meta">
+                  <b :class="a.flag">{{ a.flag === 'high' ? '偏高' : '偏低' }}</b>
+                  {{ a.profileName }}
+                </span>
+              </button>
+            </div>
+          </template>
+          <div v-else class="board-empty">
+            <span v-html="ICONS.pulse"></span>
+            <div>
+              <b>暂无需要优先处理的指标</b>
+              <p>记录一次血压、血糖，或上传化验报告后，这里会按偏离程度排序。</p>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="series.length" class="board-section trends-section">
+          <div class="section-title">
+            <div><span class="section-index">02</span><h2>近期趋势</h2></div>
+            <span class="section-note">至少两次记录后生成</span>
           </div>
           <div class="trends">
             <button
               v-for="sr in series"
               :key="sr.metricType"
-              class="trend"
               type="button"
               @click="router.push('/health')"
             >
               <span class="trend-head">
-                <b>{{ sr.metricType }}</b>
-                <em class="num">{{ sr.points[sr.points.length - 1]?.value ?? '—' }}</em>
+                <span><b>{{ sr.metricType }}</b><small>{{ sr.points.length }} 次记录</small></span>
+                <em class="num">
+                  {{ sr.points[sr.points.length - 1]?.value ?? '—' }}
+                  <small>{{ sr.unit }}</small>
+                </em>
               </span>
-              <v-chart :option="sparkOption(sr)" autoresize style="height: 58px" />
+              <v-chart :option="sparkOption(sr)" autoresize class="sparkline" />
             </button>
           </div>
-        </div>
-      </Shell>
+        </section>
 
-      <!-- 家人与近期各占半行，内容按自身高度落位。 -->
-      <Shell class="b6" v-reveal="80">
-        <div>
-          <div class="section-head">
-            <h3>家人</h3>
-            <span v-if="overview.profiles.length" class="count num">{{ overview.profiles.length }}</span>
-          </div>
-          <div class="folks">
-            <button
-              v-for="p in overview.profiles"
-              :key="p.id"
-              class="folk"
-              type="button"
-              @click="router.push('/health?id=' + p.id)"
-            >
-              <span class="face">{{ initial(p.displayName) }}</span>
-              <span class="folk-txt">
-                <b>{{ p.displayName || '未命名' }}</b>
-                <i>{{ p.relation || '档案' }}{{ p.age ? ' · ' + p.age + '岁' : '' }}</i>
-              </span>
-            </button>
-            <button class="folk add" type="button" @click="router.push('/health?new=1')">
-              <span class="face plus" v-html="ICONS.plus"></span>
-              <span class="folk-txt"><b>建一份新的</b><i>爸妈、孩子或自己</i></span>
-            </button>
-          </div>
-        </div>
-      </Shell>
-
-      <Shell v-if="hasRecent" class="b6" v-reveal="120">
-        <div class="recent">
-          <div class="section-head">
-            <h3>最近</h3>
-          </div>
-          <section v-if="overview.recentSessions.length" class="recent-group">
-            <div class="recent-label">
-              <h4>问过的</h4>
-              <router-link class="btn btn-quiet btn-sm" to="/chat">全部</router-link>
+        <div class="board-split">
+          <section class="board-section family-section">
+            <div class="section-title compact-title">
+              <div>
+                <span class="section-index">{{ series.length ? '03' : '02' }}</span>
+                <h2>家庭档案</h2>
+              </div>
+              <span class="section-note num">{{ overview.profiles.length }} 人</span>
             </div>
-            <button
-              v-for="s in overview.recentSessions"
-              :key="s.id"
-              class="line"
-              type="button"
-              @click="router.push('/chat?sid=' + s.id)"
-            >
-              <b>{{ s.title }}</b>
-              <time>{{ formatWhen(s.updatedAt) }}</time>
-            </button>
+            <div class="folks">
+              <button
+                v-for="p in overview.profiles"
+                :key="p.id"
+                type="button"
+                @click="router.push('/health?id=' + p.id)"
+              >
+                <span class="face">{{ initial(p.displayName) }}</span>
+                <span class="folk-txt">
+                  <b>{{ p.displayName || '未命名' }}</b>
+                  <small>{{ p.relation || '档案' }}{{ p.age ? ' · ' + p.age + '岁' : '' }}</small>
+                </span>
+                <span class="row-arrow" v-html="ICONS.arrow"></span>
+              </button>
+              <button class="add-person" type="button" @click="router.push('/health?new=1')">
+                <span class="face" v-html="ICONS.plus"></span>
+                <span class="folk-txt"><b>新建家庭档案</b><small>为自己或家人持续记录</small></span>
+              </button>
+            </div>
           </section>
-          <section v-if="overview.recentReports.length" class="recent-group">
-            <div class="recent-label">
-              <h4>读过的报告</h4>
-              <router-link class="btn btn-quiet btn-sm" to="/health?tab=reports">全部</router-link>
+
+          <section class="board-section recent-section">
+            <div class="section-title compact-title">
+              <div>
+                <span class="section-index">{{ series.length ? '04' : '03' }}</span>
+                <h2>最近使用</h2>
+              </div>
+              <span class="section-note">继续上次进度</span>
             </div>
-            <button
-              v-for="r in overview.recentReports"
-              :key="r.id"
-              class="line"
-              type="button"
-              @click="router.push('/reports/' + r.id)"
-            >
-              <b>{{ r.filename }}</b>
-              <time>{{ formatWhen(r.createdAt) }}</time>
-            </button>
+            <div v-if="hasRecent" class="recent">
+              <button
+                v-for="s in overview.recentSessions"
+                :key="`s-${s.id}`"
+                type="button"
+                @click="router.push('/chat?sid=' + s.id)"
+              >
+                <span class="recent-type">问诊</span>
+                <b>{{ s.title }}</b>
+                <time>{{ formatWhen(s.updatedAt) }}</time>
+              </button>
+              <button
+                v-for="r in overview.recentReports"
+                :key="`r-${r.id}`"
+                type="button"
+                @click="router.push('/reports/' + r.id)"
+              >
+                <span class="recent-type report">报告</span>
+                <b>{{ r.filename }}</b>
+                <time>{{ formatWhen(r.createdAt) }}</time>
+              </button>
+            </div>
+            <div v-else class="recent-empty">完成问诊或报告解读后，可从这里快速继续。</div>
           </section>
         </div>
-      </Shell>
-    </div>
-    </div>
+      </main>
 
-    <aside class="news" aria-label="健康新闻">
-      <div class="news-head">
-        <h2 class="news-title"><span class="news-ico" v-html="ICONS.spark"></span>健康新闻</h2>
-        <span class="news-src">世界卫生组织 · 中文</span>
-      </div>
-      <div v-if="news.length" class="news-list">
-        <button
-          v-for="n in news"
-          :key="n.id"
-          class="news-card"
-          type="button"
-          @click="router.push('/news/' + n.id)"
-        >
-          <!-- grid 不能直接放在 button 上：Chrome 对 button 的 grid 布局
-               不完整（高度塌陷、内容叠在一起），外壳只负责观感。 -->
-          <span class="news-inner">
-            <NewsPhoto v-if="n.image" :id="n.id" :alt="n.title" />
-            <span class="news-body">
-              <h4>{{ n.title }}</h4>
-              <p>{{ n.summary }}</p>
+      <aside class="news" aria-label="权威健康资讯">
+        <div class="news-head">
+          <div><span class="eyebrow">PUBLIC HEALTH BRIEF</span><h2>权威健康简报</h2></div>
+          <span class="verified"><span></span>公开来源</span>
+        </div>
+        <div v-if="news.length" class="news-list">
+          <button
+            v-for="(n, index) in news"
+            :key="n.id"
+            class="news-item"
+            :class="{ featured: index === 0, 'has-photo': !!n.image }"
+            type="button"
+            @click="router.push('/news/' + n.id)"
+          >
+            <NewsPhoto v-if="n.image" :id="n.id" :alt="n.title" class="news-photo" />
+            <span class="news-copy">
               <span class="news-meta">
                 <b>{{ n.sourceName || '权威资讯' }}</b>
                 <time>{{ shortDate(n.publishedOn) }}</time>
               </span>
+              <strong>{{ n.title }}</strong>
+              <span v-if="index === 0" class="news-summary">{{ n.summary }}</span>
             </span>
-          </span>
-        </button>
-      </div>
-      <p v-else class="news-empty">新闻正在路上，稍后再来看看。</p>
-      <p class="news-foot">摘自权威机构公开资讯 · 不构成医疗建议</p>
-    </aside>
+          </button>
+        </div>
+        <p v-else class="news-empty">暂无可用资讯，请稍后刷新。</p>
+        <p class="news-foot">内容摘自公开权威机构，仅供健康科普参考。</p>
+      </aside>
     </div>
 
     <MedicalDisclaimer />
@@ -282,7 +265,6 @@ import { ICONS } from '@/utils/icons'
 import LabStrip from '@/components/LabStrip.vue'
 import NewsPhoto from '@/components/NewsPhoto.vue'
 import MedicalDisclaimer from '@/components/MedicalDisclaimer.vue'
-import Shell from '@/components/Shell.vue'
 
 ensureCharts()
 
@@ -290,13 +272,41 @@ const router = useRouter()
 const q = ref('')
 const news = ref<NewsListItem[]>([])
 
-/** 快捷入口。底色用强调色与数据色的极淡washes，不引第二个品牌色。 */
 const QUICK = [
-  { to: '/reports/upload', label: '读化验单', icon: 'camera', bg: 'var(--flag-low-wash)', fg: 'var(--flag-low)' },
-  { to: '/health?tab=metrics', label: '记指标', icon: 'pulse', bg: 'var(--flag-high-wash)', fg: 'var(--flag-high)' },
-  { to: '/health?tab=advice', label: '健康建议', icon: 'heart', bg: 'var(--flag-normal-wash)', fg: 'var(--flag-normal)' },
-  { to: '/health?tab=history', label: '病史', icon: 'book2', bg: 'var(--accent-wash)', fg: 'var(--accent)' },
+  {
+    to: '/reports/upload',
+    label: '解读报告',
+    hint: '上传图片或 PDF',
+    icon: 'camera',
+    bg: 'var(--info-wash)',
+    fg: 'var(--info)',
+  },
+  {
+    to: '/health?tab=metrics',
+    label: '记录指标',
+    hint: '血压、血糖等',
+    icon: 'pulse',
+    bg: 'var(--flag-high-wash)',
+    fg: 'var(--flag-high)',
+  },
+  {
+    to: '/health?tab=advice',
+    label: '健康建议',
+    hint: '按档案查看',
+    icon: 'heart',
+    bg: 'var(--flag-normal-wash)',
+    fg: 'var(--flag-normal)',
+  },
+  {
+    to: '/health?tab=history',
+    label: '病史用药',
+    hint: '维护长期资料',
+    icon: 'book2',
+    bg: 'var(--accent-wash)',
+    fg: 'var(--accent)',
+  },
 ] as const
+
 const loading = ref(true)
 const overview = reactive<HomeOverview>({
   profileCount: 0,
@@ -312,27 +322,18 @@ const overview = reactive<HomeOverview>({
 })
 
 const suggests = SUGGESTIONS.home
-
-/**
- * 只保留画得出走势的序列：至少要两个点才谈得上"走势"。
- * 后端目前会返回 points 为空的条目（还遇到过 metricType 带脏前缀
- * 如 "33:空腹血糖"），前端不替它画一个空图表框。
- */
 const series = computed(() => overview.series.filter((sr) => (sr.points?.length || 0) >= 2))
 const alerts = computed(() => overview.alerts)
 const hasAnyData = computed(() => overview.metricCount > 0 || overview.reportCount > 0)
-const hasRecent = computed(() => overview.recentSessions.length > 0 || overview.recentReports.length > 0)
+const hasRecent = computed(
+  () => overview.recentSessions.length > 0 || overview.recentReports.length > 0,
+)
 
 const today = computed(() => {
   const d = new Date()
   return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`
 })
 
-/**
- * 头条指标：越参考线最远的那一项。
- * 用「偏离量 ÷ 区间宽度」归一化后比较 —— 血糖超 1 和血压超 1
- * 严重程度完全不同，直接比绝对差值会挑错人。
- */
 const ranked = computed(() =>
   [...overview.alerts]
     .map((a) => {
@@ -350,12 +351,6 @@ const ranked = computed(() =>
 const headline = computed(() => ranked.value[0] || null)
 const rest = computed(() => ranked.value.slice(1))
 
-/** 一位数用汉字更像人话：「三项指标」读着比「3 项指标」自然。 */
-function cn(n: number) {
-  return ['零', '一', '两', '三', '四', '五', '六', '七', '八', '九'][n] ?? String(n)
-}
-
-/** 2026-08-20 → 08月20日：窄栏里日期越短越好扫，当年份不变时年份是冗余。 */
 function shortDate(iso?: string) {
   if (!iso) return ''
   const parts = iso.split('-')
@@ -370,7 +365,6 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-  // 新闻流失败静默降级：首页主体不依赖它
   try {
     news.value = (await listNews(12)).data || []
   } catch {
@@ -388,7 +382,6 @@ function goAsk() {
   router.push(text ? { path: '/chat', query: { q: text } } : '/chat')
 }
 
-/** 迷你走势：只留线形，坐标轴全部隐藏。 */
 function sparkOption(sr: MetricSeries) {
   const t = chartTheme()
   const css = getComputedStyle(document.documentElement)
@@ -427,253 +420,103 @@ function sparkOption(sr: MetricSeries) {
 
 <style scoped>
 .page {
+  width: 100%;
+  max-width: 1600px;
   display: grid;
+  gap: var(--space-5);
+}
+
+.workspace-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
   gap: var(--space-6);
-  /* 首页是主栏 + 新闻栏的宽两栏，上限放宽到 1760px：
-     1920 屏（内容区约 1680px）能整幅铺满，不剩右侧死角白。 */
-  max-width: 1760px;
+  padding: var(--space-1) 0 var(--space-5);
+  border-bottom: 1px solid var(--edge);
 }
 
-/* ---- Hero ---- */
-.hero {
-  padding: var(--space-2) 0 var(--space-1);
-  margin-bottom: var(--space-7);
+.workspace-copy {
+  min-width: 0;
 }
 
-/* 中文标题的宽度必须用 em 而不是 ch ——
-   ch 按拉丁 "0" 的字宽算，汉字约是它的两倍宽，
-   22ch 实际只放得下 11 个汉字，标题会被劈在词中间。
-   7.4em ≈ 每行 7 个汉字，两行成句。 */
-.hero h1 {
-  margin: var(--space-4) 0 0;
-  max-width: min(7.4em, 100%);
-  white-space: normal;
-  overflow-wrap: anywhere;
+.workspace-head .eyebrow {
+  margin-bottom: var(--space-2);
 }
 
-/* 论断的后半句用斜体衬线 —— Fraunces 的 wonk 轴在斜体里最有性格，
-   同时把"这是一句话的重点"标出来 */
-.hero h1 em {
-  font-style: italic;
-  color: var(--accent);
+.workspace-head h1 {
+  font-size: clamp(26px, 3vw, 34px);
 }
 
-.thesis {
-  margin-top: var(--space-5);
-  max-width: 24em;
-  color: var(--ink-soft);
-  font-size: 16px;
-  line-height: 1.72;
-}
-
-.hero-acts {
+.status-copy {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-top: var(--space-6);
-}
-
-/* ---- 快捷入口 ---- */
-.quick {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-2);
-  padding: var(--space-1);
-  margin-bottom: var(--space-5);
-}
-
-.q {
-  min-width: 0;
-  display: grid;
-  justify-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-2);
-  border: 0;
-  border-radius: var(--r-card);
-  background: none;
-  cursor: pointer;
-  color: var(--ink-soft);
-  font-size: 12.5px;
-  font-weight: 500;
-  transition: background 0.4s var(--ease), transform 0.4s var(--ease);
-}
-
-.q:active {
-  transform: scale(0.95);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .q:hover {
-    background: var(--tray);
-  }
-}
-
-.q-ico {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: var(--r-pill);
-}
-
-.q-ico :deep(svg) {
-  width: 21px;
-  height: 21px;
-  display: block;
-}
-
-/* ---- 两栏：主栏收窄，右侧新闻流 ---- */
-.home-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 336px;
-  gap: var(--space-6);
-  align-items: start;
-}
-
-.news {
-  position: sticky;
-  /* 与 .main 的顶部内边距对齐，吸顶时和主栏一起挂在视口上 */
-  top: var(--main-pad);
-}
-
-.news-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-1) var(--space-1) var(--space-3);
-}
-
-.news-title {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.news-ico :deep(svg) {
-  width: 15px;
-  height: 15px;
-  color: var(--accent);
-}
-
-.news-src {
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-
-.news-list {
-  display: grid;
-  gap: var(--space-3);
-  /* 一屏内自己滚动：拖动滚动条即可翻完整列，主栏不受牵连 */
-  max-height: calc(100dvh - var(--topbar-h) - (2 * var(--main-pad)));
-  overflow-y: auto;
-  padding: var(--space-1) var(--space-2) var(--space-3) var(--space-1);
-  scrollbar-width: thin;
-  scrollbar-color: var(--edge-strong) transparent;
-}
-
-/* 公众号式图文卡：图在上，标题、摘要、来源在下 */
-.news-card {
-  display: block;
-  padding: 0;
-  overflow: hidden;
-  background: var(--card);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-card);
-  box-shadow: var(--inner-light), var(--shadow-1);
-  cursor: pointer;
-  text-align: left;
-  transition: transform 0.45s var(--ease), box-shadow 0.45s var(--ease),
-    border-color 0.3s var(--ease-soft);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .news-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--inner-light), var(--shadow-3);
-    border-color: var(--edge-strong);
-  }
-}
-
-.news-card:active {
-  transform: scale(0.985);
-  transition-duration: 120ms;
-}
-
-.news-inner {
-  display: grid;
-}
-
-.news-body {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-}
-
-.news-body h4 {
-  font-size: 14px;
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.news-body p {
-  font-size: 12.5px;
-  line-height: 1.66;
+  margin-top: var(--space-2);
   color: var(--ink-mute);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  font-size: 13.5px;
+}
+
+.status-copy strong {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.status-copy strong::after {
+  content: '·';
+  margin-left: var(--space-2);
+  color: var(--ink-faint);
+}
+
+.workspace-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.command-center {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(440px, 0.8fr);
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--r-shell);
+  background: var(--card);
+  box-shadow: var(--shadow-2);
   overflow: hidden;
 }
 
-.news-meta {
+.ask-block {
+  padding: var(--space-5);
+  border-right: 1px solid var(--edge);
+}
+
+.command-label {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-top: 2px;
-  font-size: 11.5px;
+  margin-bottom: var(--space-3);
+}
+
+.command-label span {
+  font-weight: 650;
+}
+
+.command-label small {
   color: var(--ink-faint);
+  font-size: 12px;
 }
 
-.news-meta b {
-  font-weight: 550;
-}
-
-.news-empty {
-  padding: 18px 4px;
-  color: var(--ink-faint);
-  font-size: 13px;
-}
-
-.news-foot {
-  margin-top: var(--space-3);
-  padding: 0 var(--space-1);
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--ink-faint);
-}
-
-/* ---- 提问 ---- */
 .ask-form {
   display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  background: var(--sunk);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-pill);
-  padding: 5px 5px 5px 18px;
-  transition: border-color 0.3s var(--ease-soft), box-shadow 0.4s var(--ease);
+  min-height: 48px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--r-control);
+  background: var(--paper);
+  overflow: hidden;
+  transition: border-color 0.16s var(--ease-soft), box-shadow 0.16s var(--ease-soft);
 }
 
 .ask-form:focus-within {
-  border-color: var(--accent-line);
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-wash);
 }
 
@@ -681,21 +524,30 @@ function sparkOption(sr: MetricSeries) {
   flex: 1;
   min-width: 0;
   border: 0;
-  background: none;
+  outline: 0;
+  padding: 0 var(--space-4);
   color: var(--ink);
-  outline: none;
-  font-size: 15px;
+  background: transparent;
+  font-size: 14px;
 }
 
 .ask-form input::placeholder {
   color: var(--ink-faint);
 }
 
-.ask-form .btn-sm {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  flex-shrink: 0;
+.ask-send {
+  width: 48px;
+  flex: 0 0 48px;
+  border: 0;
+  border-left: 1px solid var(--accent-line);
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+}
+
+.ask-send :deep(svg) {
+  width: 18px;
+  height: 18px;
 }
 
 .seeds {
@@ -705,250 +557,872 @@ function sparkOption(sr: MetricSeries) {
   margin-top: var(--space-3);
 }
 
-/* ---- 头条指标 ---- */
-.focus-who {
-  margin-top: var(--space-3);
-  font-size: 12.5px;
+.seeds button {
+  padding: var(--space-1) 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.seeds button + button::before {
+  content: '·';
+  margin-right: var(--space-2);
   color: var(--ink-faint);
 }
 
-.focus :deep(.lab-name) {
-  display: -webkit-box;
-  overflow: hidden;
-  white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.quick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-/* ---- 其余越线项 ---- */
-.rest {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(232px, 1fr));
+.quick > button {
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-bottom: 1px solid var(--edge);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s var(--ease-soft);
+}
+
+.quick > button:nth-child(odd) {
+  border-right: 1px solid var(--edge);
+}
+
+.quick > button:nth-child(n + 3) {
+  border-bottom: 0;
+}
+
+.q-ico,
+.face {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.q-ico {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-control);
+}
+
+.q-ico :deep(svg) {
+  width: 17px;
+  height: 17px;
+}
+
+.q-copy {
+  min-width: 0;
+  display: grid;
+}
+
+.q-copy b {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.q-copy small {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+
+.q-arrow,
+.row-arrow {
+  margin-left: auto;
+  color: var(--ink-faint);
+}
+
+.q-arrow :deep(svg),
+.row-arrow :deep(svg) {
+  width: 15px;
+  height: 15px;
+}
+
+.overview-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border-block: 1px solid var(--edge);
+}
+
+.overview-strip div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.overview-strip div + div {
+  border-left: 1px solid var(--edge);
+}
+
+.overview-strip dt {
+  color: var(--ink-mute);
+  font-size: 12.5px;
+}
+
+.overview-strip dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 21px;
+  font-weight: 650;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: var(--space-5);
   align-items: start;
 }
 
-.rest-card {
-  padding: 15px 17px 13px;
+.clinical-board {
+  min-width: 0;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-shell);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
 }
 
-.rest-foot {
+.board-section {
+  padding: var(--space-5);
+}
+
+.board-section + .board-section,
+.board-split {
+  border-top: 1px solid var(--edge);
+}
+
+.section-title,
+.section-title > div {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  font-size: 12px;
-  color: var(--ink-faint);
 }
 
-/* ---- 走势 ---- */
+.section-title {
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.section-title > div {
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.section-title h2 {
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.section-index {
+  color: var(--accent);
+  font: 600 11px/1 var(--font-mono);
+}
+
+.section-note {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  color: var(--ink-mute);
+  font-size: 12.5px;
+}
+
+.text-link :deep(svg) {
+  width: 14px;
+  height: 14px;
+}
+
+.focus-skeleton {
+  height: 132px;
+  border-radius: var(--r-control);
+}
+
+.focus-row {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: center;
+  padding: var(--space-4);
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--flag-high);
+  border-radius: var(--r-control);
+  background: var(--paper);
+}
+
+.focus-summary {
+  display: grid;
+  align-content: center;
+  gap: var(--space-2);
+}
+
+.signal {
+  width: max-content;
+  padding: 2px var(--space-2);
+  border-radius: var(--r-chip);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.signal.high,
+.rest-meta .high {
+  color: var(--flag-high);
+}
+
+.signal.high {
+  background: var(--flag-high-wash);
+}
+
+.signal.low,
+.rest-meta .low {
+  color: var(--flag-low);
+}
+
+.signal.low {
+  background: var(--flag-low-wash);
+}
+
+.focus-summary p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.focus-summary small {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.focus-strip {
+  min-width: 0;
+}
+
+.rest-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: var(--space-4);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-control);
+  overflow: hidden;
+}
+
+.rest-list > button {
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-bottom: 1px solid var(--edge);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rest-list > button:nth-child(odd) {
+  border-right: 1px solid var(--edge);
+}
+
+.rest-list > button:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.rest-meta {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+
+.rest-meta b {
+  font-weight: 650;
+}
+
+.board-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: 1px dashed var(--edge-strong);
+  border-radius: var(--r-control);
+  background: var(--paper);
+}
+
+.board-empty > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--r-control);
+  background: var(--flag-normal-wash);
+  color: var(--flag-normal);
+}
+
+.board-empty > span :deep(svg) {
+  width: 17px;
+  height: 17px;
+}
+
+.board-empty b {
+  font-size: 13.5px;
+}
+
+.board-empty p {
+  margin-top: var(--space-1);
+  color: var(--ink-mute);
+  font-size: 12.5px;
+}
+
 .trends {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--space-3);
-}
-
-.trend {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   border: 1px solid var(--edge);
-  border-radius: var(--r-card);
-  background: transparent;
-  padding: 11px 13px 6px;
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.3s var(--ease-soft), background 0.4s var(--ease);
+  border-radius: var(--r-control);
+  overflow: hidden;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .trend:hover {
-    border-color: var(--edge-strong);
-    background: var(--tray);
-  }
+.trends > button {
+  min-width: 0;
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  border: 0;
+  border-right: 1px solid var(--edge);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trends > button:last-child {
+  border-right: 0;
 }
 
 .trend-head {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: 2px;
+  gap: var(--space-3);
+}
+
+.trend-head > span {
+  min-width: 0;
+  display: grid;
 }
 
 .trend-head b {
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--ink-soft);
-}
-
-.trend-head em {
-  font-style: normal;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-/* ---- 家人 ---- */
-.folks {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.folk {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border: 0;
-  border-radius: var(--r-control);
-  background: none;
-  cursor: pointer;
-  text-align: left;
-  color: var(--ink);
-  transition: background 0.4s var(--ease), transform 0.4s var(--ease);
-}
-
-.folk:active {
-  transform: scale(0.985);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .folk:hover {
-    background: var(--tray);
-  }
-}
-
-.folk-txt {
-  min-width: 0;
-}
-
-.folk-txt b {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
   overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.folk-txt i {
-  display: block;
-  font-style: normal;
+.trend-head small {
   color: var(--ink-faint);
-  font-size: 12px;
-  margin-top: 1px;
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.trend-head em {
+  flex-shrink: 0;
+  color: var(--ink);
+  font-size: 17px;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.sparkline {
+  height: 54px;
+}
+
+.board-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.board-split > section + section {
+  border-left: 1px solid var(--edge);
+}
+
+.compact-title {
+  margin-bottom: var(--space-3);
+}
+
+.folks,
+.recent {
+  display: grid;
+}
+
+.folks > button,
+.recent > button {
+  min-width: 0;
+  border: 0;
+  border-top: 1px solid var(--edge);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.folks > button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
 }
 
 .face {
   width: 34px;
   height: 34px;
+  border: 1px solid var(--accent-line);
   border-radius: var(--r-avatar);
   background: var(--accent-wash);
-  border: 1px solid var(--accent-line);
   color: var(--accent);
-  display: grid;
-  place-items: center;
-  font-weight: 600;
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.face.plus {
-  background: var(--tray);
-  border-color: var(--edge);
-  color: var(--ink-mute);
-}
-
-.face.plus :deep(svg) {
-  width: 17px;
-  height: 17px;
-}
-
-/* ---- 近期列表 ---- */
-.recent,
-.recent-group {
-  display: grid;
-}
-
-.recent {
-  gap: var(--space-4);
-}
-
-.recent-group {
-  gap: 0;
-}
-
-.recent-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.recent-label h4 {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 650;
+}
+
+.face :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.add-person .face {
+  border-color: var(--edge-strong);
+  background: var(--tray);
   color: var(--ink-mute);
 }
 
-.line {
-  width: 100%;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
-  text-align: left;
-  background: none;
-  border: 0;
-  border-top: 1px solid var(--edge);
-  padding: 11px 0;
-  cursor: pointer;
-  color: var(--ink);
-  transition: color 0.3s var(--ease-soft);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .line:hover {
-    color: var(--accent);
-  }
-}
-
-.line b {
-  font-weight: 500;
-  font-size: 14px;
+.folk-txt {
   min-width: 0;
+  display: grid;
+}
+
+.folk-txt b {
   overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.line time {
+.folk-txt small {
   color: var(--ink-faint);
-  font-size: 12px;
+  font-size: 11.5px;
+}
+
+.recent > button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 13px 0;
+}
+
+.recent-type {
+  padding: 2px var(--space-2);
+  border-radius: var(--r-chip);
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.recent-type.report {
+  background: var(--info-wash);
+  color: var(--info);
+}
+
+.recent b {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent time {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.recent-empty {
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--edge);
+  color: var(--ink-faint);
+  font-size: 12.5px;
+}
+
+.news {
+  position: sticky;
+  top: var(--main-pad);
+  min-width: 0;
+  border-top: 3px solid var(--ink);
+}
+
+.news-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--edge-strong);
+}
+
+.news-head .eyebrow {
+  margin-bottom: var(--space-1);
+  font-size: 9.5px;
+}
+
+.news-head h2 {
+  font-size: 18px;
+}
+
+.verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.verified > span {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--flag-normal);
+}
+
+.news-list {
+  max-height: calc(100dvh - var(--topbar-h) - (2 * var(--main-pad)) - 98px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.news-item {
+  width: 100%;
+  min-width: 0;
+  display: block;
+  padding: var(--space-3) 0;
+  border: 0;
+  border-bottom: 1px solid var(--edge);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.news-item.has-photo:not(.featured) {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.news-item.featured {
+  padding-top: var(--space-4);
+}
+
+.news-photo {
+  border-radius: var(--r-control);
+}
+
+.news-item:not(.featured) .news-photo {
+  aspect-ratio: 4 / 3;
+}
+
+.news-copy {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.featured .news-copy {
+  padding-top: var(--space-3);
+}
+
+.news-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--ink-faint);
+  font-size: 10.5px;
+}
+
+.news-meta b {
+  overflow: hidden;
+  color: var(--accent);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.news-meta time {
   flex-shrink: 0;
 }
 
-@media (max-width: 1140px) {
-  .home-grid {
+.news-copy strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.featured .news-copy strong {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.news-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-mute);
+  font-size: 12.5px;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.news-empty,
+.news-foot {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+
+.news-empty {
+  padding: var(--space-5) 0;
+  border-bottom: 1px solid var(--edge);
+}
+
+.news-foot {
+  margin-top: var(--space-3);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .quick > button:hover,
+  .rest-list > button:hover,
+  .trends > button:hover,
+  .folks > button:hover,
+  .recent > button:hover {
+    background: var(--tray);
+  }
+
+  .seeds button:hover,
+  .text-link:hover {
+    color: var(--accent);
+  }
+
+  .seeds button:hover {
+    border-bottom-color: var(--accent-line);
+  }
+
+  .news-item:hover .news-copy strong {
+    color: var(--accent);
+  }
+}
+
+@media (max-width: 1220px) {
+  .command-center {
     grid-template-columns: 1fr;
   }
+
+  .ask-block {
+    border-right: 0;
+    border-bottom: 1px solid var(--edge);
+  }
+
+  .workspace-grid {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+
+@media (max-width: 980px) {
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
   .news {
     position: static;
   }
+
   .news-list {
-    max-height: 480px;
+    max-height: none;
+  }
+
+  .news-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-5);
+  }
+
+  .news-item.featured {
+    grid-row: span 3;
   }
 }
 
 @media (max-width: 720px) {
   .page {
-    gap: var(--space-5);
+    gap: var(--space-4);
   }
-  .hero {
-    max-width: none;
+
+  .workspace-head {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding-bottom: var(--space-4);
   }
-  .rest {
+
+  .workspace-head h1 {
+    font-size: 26px;
+  }
+
+  .status-copy {
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .status-copy strong::after {
+    content: none;
+  }
+
+  .workspace-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-actions .btn {
+    min-width: 0;
+    padding-inline: var(--space-2);
+  }
+
+  .ask-block,
+  .board-section {
+    padding: var(--space-4);
+  }
+
+  .command-label {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .ask-form {
+    min-height: 46px;
+  }
+
+  .quick > button {
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .q-ico {
+    width: 32px;
+    height: 32px;
+  }
+
+  .q-copy small,
+  .q-arrow {
+    display: none;
+  }
+
+  .overview-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overview-strip div:nth-child(3),
+  .overview-strip div:nth-child(4) {
+    border-top: 1px solid var(--edge);
+  }
+
+  .overview-strip div:nth-child(3) {
+    border-left: 0;
+  }
+
+  .focus-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  .rest-list,
+  .board-split {
     grid-template-columns: 1fr;
   }
-  .quick {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  .rest-list > button:nth-child(odd) {
+    border-right: 0;
+  }
+
+  .rest-list > button:nth-last-child(2) {
+    border-bottom: 1px solid var(--edge);
+  }
+
+  .board-split > section + section {
+    border-top: 1px solid var(--edge);
+    border-left: 0;
+  }
+
+  .trends {
+    grid-template-columns: 1fr;
+  }
+
+  .trends > button {
+    border-right: 0;
+    border-bottom: 1px solid var(--edge);
+  }
+
+  .trends > button:last-child {
+    border-bottom: 0;
+  }
+
+  .news-list {
+    display: block;
+  }
+
+  .news-item.featured {
+    grid-row: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .seeds button:nth-child(n + 3) {
+    display: none;
+  }
+
+  .section-title {
+    align-items: flex-start;
+  }
+
+  .section-note {
+    max-width: 9em;
+    text-align: right;
+  }
+
+  .recent > button {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .recent time {
+    display: none;
   }
 }
 </style>
