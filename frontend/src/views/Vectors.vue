@@ -8,24 +8,15 @@
       </template>
     </PageHeader>
 
-    <div class="stats">
-      <div class="stat tile">
-        <span>向量库</span>
-        <em>{{ milvusServing ? 'Milvus' : '内存' }}</em>
+    <section class="system-strip" aria-label="向量服务状态">
+      <div class="system-state">
+        <i :class="{ ok: milvusServing }"></i>
+        <span><small>当前运行模式</small><strong>{{ milvusServing ? 'Milvus 在线检索' : '内存降级检索' }}</strong></span>
       </div>
-      <div class="stat tile">
-        <span>Milvus</span>
-        <em :class="milvusServing ? 'ok' : ''">{{ milvusServing ? '已连接' : '未接入' }}</em>
-      </div>
-      <div class="stat tile">
-        <span>向量条数</span>
-        <em>{{ store.count }}</em>
-      </div>
-      <div class="stat tile">
-        <span>维度</span>
-        <em>{{ store.dim || 256 }}</em>
-      </div>
-    </div>
+      <div class="stat"><span>连接</span><em :class="milvusServing ? 'ok' : ''">{{ milvusServing ? '正常' : '未接入' }}</em></div>
+      <div class="stat"><span>向量条数</span><em class="num">{{ store.count }}</em></div>
+      <div class="stat"><span>向量维度</span><em class="num">{{ store.dim || 256 }}</em></div>
+    </section>
     <div v-if="statusCopy.summary" class="status-detail">
       <p>{{ statusCopy.summary }}{{ store.collection ? ' · 集合 ' + store.collection : '' }}</p>
       <details v-if="statusCopy.technical">
@@ -34,7 +25,7 @@
       </details>
     </div>
 
-    <Shell>
+    <section class="search-console panel core-pad">
       <form class="ask" @submit.prevent="run">
         <input v-model="q" aria-label="向量检索内容" placeholder="例如：二甲双胍注意事项 / 高血压饮食" />
         <button class="btn btn-primary" type="submit" :disabled="loading || !q.trim()">{{ loading ? '检索中…' : '检索' }}</button>
@@ -43,7 +34,7 @@
         <button v-for="s in suggests" :key="s" class="chip-btn" type="button" @click="q = s; run()">{{ s }}</button>
       </div>
       <p v-if="inspect" class="meta">耗时 {{ inspect.elapsedMs }} ms · ANN 召回 {{ inspect.rawHits.length }} · 词项过滤后 {{ inspect.keptHits.length }}</p>
-    </Shell>
+    </section>
 
     <section v-if="!inspect" class="panel empty vector-empty">
       <span v-html="ICONS.dots"></span>
@@ -196,28 +187,67 @@ function onThemeChange() {
 </script>
 
 <style scoped>
-.stats {
+.system-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--space-3);
-  margin-bottom: var(--space-2);
+  grid-template-columns: minmax(260px, 1.5fr) repeat(3, minmax(120px, 0.7fr));
+  border: 1px solid var(--edge);
+  border-radius: var(--r-shell);
+  background: var(--card);
+  overflow: hidden;
+  margin-bottom: var(--space-3);
 }
 .stat {
-  padding: var(--space-4);
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-height: 70px;
+  padding: 12px 16px;
+  border-left: 1px solid var(--edge);
 }
 .stat span {
-  color: var(--ink-faint);
-  font-size: 12px;
+  color: var(--ink-mute);
+  font-size: 11px;
 }
 .stat em {
-  display: block;
   font-style: normal;
   font-family: var(--font);
-  font-size: 22px;
-  margin-top: 4px;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 650;
 }
 .stat em.ok {
   color: var(--flag-normal);
+}
+.system-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 70px;
+  padding: 12px 16px;
+}
+.system-state > i {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: var(--flag-high);
+  box-shadow: 0 0 0 4px var(--flag-high-wash);
+}
+.system-state > i.ok {
+  background: var(--flag-normal);
+  box-shadow: 0 0 0 4px var(--flag-normal-wash);
+}
+.system-state > span {
+  display: grid;
+  gap: 2px;
+}
+.system-state small {
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+.system-state strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
 }
 .status-detail {
   display: grid;
@@ -252,9 +282,9 @@ function onThemeChange() {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--edge-strong);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-control);
   padding: 10px var(--space-4);
-  background: var(--sunk);
+  background: var(--card);
   color: var(--ink);
   font-size: 14px;
   outline: none;
@@ -292,7 +322,10 @@ function onThemeChange() {
   padding: var(--space-3) 0;
 }
 .hit.keep {
-  background: linear-gradient(90deg, var(--accent-wash), transparent);
+  margin-inline: calc(var(--space-3) * -1);
+  padding-inline: var(--space-3);
+  border-left: 3px solid var(--accent);
+  background: var(--accent-wash);
 }
 .hit-top {
   display: flex;
@@ -308,12 +341,39 @@ function onThemeChange() {
   color: var(--ink-faint);
 }
 @media (max-width: 900px) {
+  .system-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .system-state {
+    grid-column: 1 / -1;
+  }
+
+  .stat:nth-child(2) {
+    border-left: 0;
+  }
+
   .grid {
     grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 720px) {
+  .system-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .system-state,
+  .stat {
+    grid-column: auto;
+    border-left: 0;
+    border-top: 1px solid var(--edge);
+  }
+
+  .system-state {
+    border-top: 0;
+  }
+
   .grid {
     grid-template-columns: 1fr;
   }

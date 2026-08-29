@@ -2,19 +2,25 @@
   <div class="page">
     <PageHeader kicker="Knowledge" title="知识库" desc="优先接入世界卫生组织、国家卫生健康委等权威公开文本，也可继续上传或录入。" />
 
-    <section class="panel core-pad sync">
+    <section class="knowledge-status">
       <div class="sync-copy">
-        <div class="section-head"><h3>权威源同步</h3></div>
-        <p>从 WHO 实况报道、国家卫健委公开文件拉取；网络不通时使用已核对的官方文本快照。</p>
+        <span class="status-dot"></span>
+        <div>
+          <small>知识源状态</small>
+          <strong>权威源可同步</strong>
+          <p>WHO 与国家卫健委公开文本</p>
+        </div>
       </div>
+      <div class="status-metric"><span>已入库文档</span><strong class="num">{{ total }}</strong></div>
+      <div class="status-metric"><span>当前页</span><strong class="num">{{ page }}</strong></div>
       <button class="btn btn-primary" type="button" :disabled="syncing" @click="doSync">
         {{ syncing ? '同步中…' : '从权威源同步' }}
       </button>
     </section>
 
-    <section class="panel core-pad block">
-      <el-tabs>
-        <el-tab-pane label="上传文件">
+    <div class="intake-grid">
+      <section class="panel core-pad intake">
+        <header class="intake-head"><span v-html="ICONS.upload"></span><div><h3>文件导入</h3><p>PDF、Word 或纯文本</p></div></header>
           <el-form label-position="top">
             <el-form-item label="文件">
               <el-upload :auto-upload="false" :limit="1" :on-change="onFile" accept=".pdf,.doc,.docx,.txt">
@@ -32,8 +38,9 @@
             <el-form-item label="来源"><el-input v-model="upload.source" /></el-form-item>
             <el-button type="primary" :disabled="!file" :loading="uploading" @click="doUpload">导入并向量化</el-button>
           </el-form>
-        </el-tab-pane>
-        <el-tab-pane label="录入文本">
+      </section>
+      <section class="panel core-pad intake">
+        <header class="intake-head"><span v-html="ICONS.file"></span><div><h3>文本录入</h3><p>直接维护结构化知识</p></div></header>
           <el-form label-position="top">
             <el-form-item label="标题"><el-input v-model="text.title" /></el-form-item>
             <el-form-item label="分类">
@@ -47,12 +54,11 @@
             <el-form-item label="正文"><el-input v-model="text.content" type="textarea" :rows="8" /></el-form-item>
             <el-button type="primary" :loading="saving" @click="doText">写入知识库</el-button>
           </el-form>
-        </el-tab-pane>
-      </el-tabs>
-    </section>
+      </section>
+    </div>
 
     <section class="panel core-pad block">
-      <div class="section-head"><h3>已入库文档</h3></div>
+      <div class="section-head"><h3>已入库文档</h3><span class="count num">{{ total }}</span></div>
       <el-table :data="docs" empty-text="暂无文档">
         <el-table-column prop="title" label="标题" min-width="160" />
         <el-table-column prop="publisher" label="发布机构" width="220" />
@@ -184,22 +190,103 @@ function sourceDomain(url: string) {
 </script>
 
 <style scoped>
-.sync {
-  display: flex;
-  justify-content: space-between;
+.knowledge-status {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) repeat(2, minmax(100px, 0.55fr)) auto;
   align-items: center;
-  gap: var(--space-4);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-shell);
+  background: var(--card);
+  overflow: hidden;
 }
 .sync-copy {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 76px;
+  padding: 12px 16px;
 }
-.sync .section-head {
-  margin-bottom: var(--space-2);
+.status-dot {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: var(--r-pill);
+  background: var(--flag-normal);
+  box-shadow: 0 0 0 4px var(--flag-normal-wash);
 }
-.sync p {
+.sync-copy > div {
+  display: grid;
+  gap: 1px;
+}
+.sync-copy small,
+.status-metric span {
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+.sync-copy strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+.sync-copy p {
   margin: 0;
   color: var(--ink-faint);
-  font-size: 13px;
+  font-size: 11.5px;
+}
+.status-metric {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-height: 76px;
+  padding: 12px 16px;
+  border-left: 1px solid var(--edge);
+}
+.status-metric strong {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 650;
+}
+.knowledge-status > .btn {
+  margin: 0 16px;
+}
+.intake-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+.intake {
+  min-width: 0;
+}
+.intake-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--edge);
+}
+.intake-head > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-control);
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.intake-head > span :deep(svg) {
+  width: 17px;
+  height: 17px;
+}
+.intake-head h3 {
+  font-size: 15px;
+}
+.intake-head p {
+  margin-top: 2px;
+  color: var(--ink-faint);
+  font-size: 11px;
 }
 .block {
   margin-top: var(--space-4);
@@ -240,6 +327,20 @@ function sourceDomain(url: string) {
 }
 
 @media (max-width: 720px) {
+  .knowledge-status,
+  .intake-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .status-metric {
+    border-top: 1px solid var(--edge);
+    border-left: 0;
+  }
+
+  .knowledge-status > .btn {
+    margin: 12px 16px 16px;
+  }
+
   /* 列宽之和约 980px，窄屏必然横向滚动，这里只把字号压下来减少滚动距离 */
   .el-table {
     font-size: 12px;

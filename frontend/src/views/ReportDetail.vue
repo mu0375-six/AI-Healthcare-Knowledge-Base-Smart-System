@@ -16,6 +16,21 @@
       </template>
     </PageHeader>
 
+    <section class="report-overview" aria-label="报告概览">
+      <div>
+        <span>提取指标</span>
+        <strong class="num">{{ items.length }}</strong>
+      </div>
+      <div>
+        <span>超出参考</span>
+        <strong class="num" :class="{ alert: abnormal }">{{ abnormal }}</strong>
+      </div>
+      <div>
+        <span>档案状态</span>
+        <strong>{{ profileId ? '已选择档案' : '尚未归档' }}</strong>
+      </div>
+    </section>
+
     <div ref="docRef" class="doc">
       <Shell class="paper">
         <header class="paper-head">
@@ -207,9 +222,9 @@ async function exportPdf() {
 
 <style scoped>
 .page {
-  max-width: 720px;
+  max-width: 1120px;
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
 
 .page :deep(.head) {
@@ -227,8 +242,62 @@ async function exportPdf() {
   gap: var(--space-2);
 }
 
+.report-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--edge);
+  border-radius: var(--r-shell);
+  background: var(--card);
+  overflow: hidden;
+}
+
+.report-overview > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 62px;
+  padding: 12px 16px;
+  border-left: 1px solid var(--edge);
+}
+
+.report-overview > div:first-child {
+  border-left: 0;
+}
+
+.report-overview span {
+  color: var(--ink-mute);
+  font-size: 12px;
+}
+
+.report-overview strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.report-overview strong.num {
+  font-size: 20px;
+}
+
+.report-overview strong.alert {
+  color: var(--flag-high);
+}
+
 .doc {
+  width: min(780px, 100%);
+  margin-inline: auto;
   min-width: 0;
+}
+
+.paper {
+  border-top: 4px solid var(--accent);
+  box-shadow: var(--shadow-2);
+}
+
+.raw-shell {
+  width: min(780px, 100%);
+  margin-inline: auto;
 }
 
 .paper-head {
@@ -240,7 +309,7 @@ async function exportPdf() {
 
 .paper-head h2 {
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: 30px;
   line-height: 1.15;
   word-break: break-word;
 }
@@ -305,6 +374,19 @@ async function exportPdf() {
 }
 
 @media (max-width: 720px) {
+  .report-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .report-overview > div {
+    border-left: 0;
+    border-top: 1px solid var(--edge);
+  }
+
+  .report-overview > div:first-child {
+    border-top: 0;
+  }
+
   .paper-head h2 {
     font-size: 26px;
   }

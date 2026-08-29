@@ -11,8 +11,16 @@ const router = createRouter({
       component: () => import('@/layouts/AppLayout.vue'),
       redirect: '/home',
       children: [
-        { path: 'home', component: () => import('@/views/Home.vue'), meta: { title: '今天' } },
-        { path: 'news/:id', component: () => import('@/views/NewsDetail.vue'), meta: { title: '健康新闻' } },
+        {
+          path: 'home',
+          component: () => import('@/views/Home.vue'),
+          meta: { title: '今天', topAction: { label: '上传报告', to: '/reports/upload', icon: 'upload' } },
+        },
+        {
+          path: 'news/:id',
+          component: () => import('@/views/NewsDetail.vue'),
+          meta: { title: '健康新闻', topAction: { label: '返回今天', to: '/home', icon: 'home' } },
+        },
         {
           path: 'chat',
           component: () => import('@/views/Chat.vue'),
@@ -26,7 +34,7 @@ const router = createRouter({
           component: () => import('@/views/Health.vue'),
           meta: {
             title: '档案',
-            topAction: { label: '上传报告', to: '/reports/upload', icon: 'upload' },
+            topAction: { label: '新建档案', to: { path: '/health', query: { new: '1' } }, icon: 'plus' },
           },
         },
         // 报告解读并入「档案」：上传报告产出的指标本来就写进档案，
@@ -65,7 +73,11 @@ const router = createRouter({
           // 开发者/管理员调试面板：Milvus 连接状态、向量维度、召回打分
           path: 'vectors',
           component: () => import('@/views/Vectors.vue'),
-          meta: { title: '向量检索', admin: true },
+          meta: {
+            title: '向量检索',
+            admin: true,
+            topAction: { label: '知识库管理', to: '/admin/knowledge', icon: 'book' },
+          },
         },
         {
           path: 'favorites',
@@ -78,7 +90,11 @@ const router = createRouter({
         {
           path: 'admin/knowledge',
           component: () => import('@/views/admin/Knowledge.vue'),
-          meta: { title: '知识库', admin: true },
+          meta: {
+            title: '知识库',
+            admin: true,
+            topAction: { label: '向量检索', to: '/vectors', icon: 'dots' },
+          },
         },
       ],
     },

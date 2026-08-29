@@ -6,45 +6,48 @@
       desc="多模态模型直接读图，抽出指标、判高低、逐项解读，并写进对应家人的档案。识别效果不佳时，把文字贴到下面一样能解读。"
     />
 
-    <!-- 投放区是这页的主行为：虚线边框 + 拖入/已选两个明确状态 -->
-    <section
-      class="drop"
-      :class="{ over: dragging, ready: !!file }"
-      @dragover.prevent="dragging = true"
-      @dragleave="dragging = false"
-      @drop.prevent="onDrop"
-    >
-      <span class="drop-ico" v-html="file ? ICONS.check : ICONS.upload"></span>
+    <div class="upload-workbench">
+      <section
+        class="drop"
+        :class="{ over: dragging, ready: !!file }"
+        @dragover.prevent="dragging = true"
+        @dragleave="dragging = false"
+        @drop.prevent="onDrop"
+      >
+        <span class="drop-status">{{ file ? '文件已就绪' : '文件输入' }}</span>
+        <span class="drop-ico" v-html="file ? ICONS.check : ICONS.upload"></span>
 
-      <h2 class="drop-title">{{ file ? file.name : '把报告拖到这里' }}</h2>
-      <p v-if="file" class="picked">
-        <span class="num">{{ fileSize(file.size) }}</span> · {{ kindLabel(file.name) }} · 已就绪
-        <button type="button" class="link" @click="file = null">换一份</button>
-      </p>
-      <p v-else class="formats">
-        支持 <b>PDF</b> · <b>Word</b> · <b>txt</b> · <b>图片</b>
-      </p>
+        <h2 class="drop-title">{{ file ? file.name : '拖入一份检查报告' }}</h2>
+        <p v-if="file" class="picked">
+          <span class="num">{{ fileSize(file.size) }}</span> · {{ kindLabel(file.name) }}
+          <button type="button" class="link" @click="file = null">重新选择</button>
+        </p>
+        <p v-else class="formats">PDF、Word、文本或清晰的检查单照片</p>
 
-      <div class="picks">
-        <label class="btn btn-primary" for="cap-report">
-          <span v-html="ICONS.camera"></span>拍化验单
-          <input id="cap-report" type="file" accept="image/*" capture="environment" hidden @change="pickRaw" />
-        </label>
-        <label class="btn btn-ghost" for="pick-report">
-          <span v-html="ICONS.image"></span>选择文件
-          <input
-            id="pick-report"
-            type="file"
-            accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
-            hidden
-            @change="pickRaw"
-          />
-        </label>
-      </div>
-    </section>
+        <div class="picks">
+          <label class="btn btn-primary" for="cap-report">
+            <span v-html="ICONS.camera"></span>拍摄报告
+            <input id="cap-report" type="file" accept="image/*" capture="environment" hidden @change="pickRaw" />
+          </label>
+          <label class="btn btn-ghost" for="pick-report">
+            <span v-html="ICONS.image"></span>浏览文件
+            <input
+              id="pick-report"
+              type="file"
+              accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+              hidden
+              @change="pickRaw"
+            />
+          </label>
+        </div>
+      </section>
 
-    <Shell>
-      <div class="opts">
+      <section class="setup panel core-pad">
+        <header class="setup-head">
+          <span>解读设置</span>
+          <strong>{{ profileId ? '将同步到档案' : '仅生成本次解读' }}</strong>
+        </header>
+        <div class="opts">
         <label class="field">
           <span>写入哪份档案</span>
           <el-select v-model="profileId" clearable placeholder="可选 —— 不选则只做解读，不写入" style="width: 100%">
@@ -66,14 +69,15 @@
           {{ uploading ? '正在解读' : '上传并解读' }}
           <span class="knob" v-html="uploading ? ICONS.clock : ICONS.arrow"></span>
         </button>
-        <ol v-if="uploading" class="upload-stages" aria-live="polite">
-          <li v-for="(stage, i) in UPLOAD_STAGES" :key="stage" :class="{ done: i < uploadStage, active: i === uploadStage }">
+        <ol class="upload-stages" aria-live="polite">
+          <li v-for="(stage, i) in UPLOAD_STAGES" :key="stage" :class="{ done: uploading && i < uploadStage, active: uploading && i === uploadStage }">
             <span class="stage-mark"><span v-if="i < uploadStage" v-html="ICONS.check"></span><template v-else>{{ i + 1 }}</template></span>
             {{ stage }}
           </li>
         </ol>
-      </div>
-    </Shell>
+        </div>
+      </section>
+    </div>
 
     <MedicalDisclaimer />
   </div>
@@ -89,7 +93,6 @@ import type { HealthProfile } from '@/api/types'
 import { ICONS } from '@/utils/icons'
 import MedicalDisclaimer from '@/components/MedicalDisclaimer.vue'
 import PageHeader from '@/components/PageHeader.vue'
-import Shell from '@/components/Shell.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -175,9 +178,16 @@ onBeforeUnmount(clearStages)
 
 <style scoped>
 .page {
-  max-width: 660px;
+  max-width: 1120px;
   display: grid;
   gap: var(--space-5);
+}
+
+.upload-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+  gap: var(--space-4);
+  align-items: stretch;
 }
 
 .page :deep(.head) {
@@ -186,20 +196,22 @@ onBeforeUnmount(clearStages)
 
 /* ---- 投放区 ---- */
 .drop {
+  position: relative;
+  min-height: 430px;
   display: grid;
+  align-content: center;
   justify-items: center;
   text-align: center;
-  padding: var(--space-6) var(--space-5);
-  border: 1.5px dashed var(--edge-strong);
+  padding: 64px var(--space-6) var(--space-6);
+  border: 1px dashed var(--edge-strong);
   border-radius: var(--r-shell);
-  background: var(--paper-2);
-  transition: border-color 0.18s ease, background 0.18s ease, transform 0.2s var(--ease-out);
+  background: var(--card);
+  transition: border-color 0.16s var(--ease-soft), background 0.16s var(--ease-soft);
 }
 
 .drop.over {
   border-color: var(--accent);
   background: var(--accent-wash);
-  transform: scale(1.006);
 }
 
 .drop.ready {
@@ -209,8 +221,14 @@ onBeforeUnmount(clearStages)
 }
 
 .drop-ico {
-  color: var(--ink-faint);
-  margin-bottom: var(--space-3);
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--space-4);
+  border-radius: var(--r-shell);
+  background: var(--sunk);
+  color: var(--ink-mute);
 }
 
 .drop.ready .drop-ico {
@@ -218,16 +236,33 @@ onBeforeUnmount(clearStages)
 }
 
 .drop-ico :deep(svg) {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   display: block;
 }
 
 .drop-title {
   font-family: var(--font);
-  font-size: 21px;
+  font-size: 20px;
   word-break: break-all;
   max-width: 17em;
+}
+
+.drop-status {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  padding: 4px 8px;
+  border-radius: var(--r-chip);
+  background: var(--sunk);
+  color: var(--ink-mute);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.drop.ready .drop-status {
+  background: var(--flag-normal-wash);
+  color: var(--flag-normal);
 }
 
 .formats,
@@ -263,14 +298,42 @@ onBeforeUnmount(clearStages)
   margin-top: var(--space-5);
 }
 
+.setup {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.setup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--edge);
+}
+
+.setup-head span {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.setup-head strong {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* ---- 选项 ---- */
 .opts {
   display: grid;
   gap: var(--space-4);
+  height: 100%;
 }
 
 .go {
-  margin-top: var(--space-1);
+  margin-top: auto;
 }
 
 .upload-stages {
@@ -278,6 +341,8 @@ onBeforeUnmount(clearStages)
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
   list-style: none;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--edge);
 }
 
 .upload-stages li {
@@ -316,7 +381,12 @@ onBeforeUnmount(clearStages)
 }
 
 @media (max-width: 720px) {
+  .upload-workbench {
+    grid-template-columns: 1fr;
+  }
+
   .drop {
+    min-height: 330px;
     padding: var(--space-5) var(--space-4);
   }
   .picks {

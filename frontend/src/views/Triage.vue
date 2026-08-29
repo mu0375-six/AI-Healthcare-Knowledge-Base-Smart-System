@@ -6,7 +6,9 @@
       desc="写下最困扰你的症状 —— 持续多久、什么时候加重。系统给出可能科室与紧急程度，不能替代分诊台。"
     />
 
-    <Shell v-reveal>
+    <div class="triage-workbench">
+      <aside class="input-pane">
+    <Shell>
       <div class="form">
         <label class="field">
           <span>主要症状</span>
@@ -38,6 +40,21 @@
         </button>
       </div>
     </Shell>
+
+        <div class="input-state" aria-live="polite">
+          <span>症状信息</span>
+          <strong :class="{ ready: form.symptoms.trim() }">{{ form.symptoms.trim() ? '可以开始导诊' : '等待填写' }}</strong>
+        </div>
+      </aside>
+
+      <section class="output-pane" aria-label="导诊结果">
+        <header class="output-head">
+          <div>
+            <span>结果区</span>
+            <strong>{{ result ? '本次导诊建议' : '等待分析' }}</strong>
+          </div>
+          <span class="output-status" :class="{ active: loading }">{{ loading ? '分析中' : result ? '已完成' : '未开始' }}</span>
+        </header>
 
     <div v-if="loading" class="result">
       <div class="skeleton" style="height: 52px; border-radius: var(--r-card)"></div>
@@ -157,6 +174,8 @@
       <span v-html="ICONS.compass"></span>
       <h3>还没有导诊结果</h3>
       <p>症状写得越具体，推荐的科室越准。</p>
+    </div>
+      </section>
     </div>
   </div>
 </template>
@@ -331,13 +350,97 @@ function urgencyHint(u: string) {
 
 <style scoped>
 .page {
-  max-width: 860px;
+  max-width: 1280px;
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
 
 .page :deep(.head) {
   margin-bottom: 0;
+}
+
+.triage-workbench {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.28fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.input-pane {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--space-4));
+  display: grid;
+  gap: var(--space-3);
+}
+
+.input-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 10px 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-control);
+  background: var(--card);
+  color: var(--ink-mute);
+  font-size: 12px;
+}
+
+.input-state strong {
+  color: var(--ink-faint);
+  font-weight: 620;
+}
+
+.input-state strong.ready {
+  color: var(--flag-normal);
+}
+
+.output-pane {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-4);
+  padding: 18px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-shell);
+  background: color-mix(in srgb, var(--card) 58%, var(--paper));
+}
+
+.output-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--edge);
+}
+
+.output-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.output-head span {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.output-head strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.output-status {
+  padding: 4px 8px;
+  border-radius: var(--r-chip);
+  background: var(--flag-none-wash);
+  color: var(--flag-none) !important;
+  font-weight: 620;
+}
+
+.output-status.active {
+  background: var(--info-wash);
+  color: var(--info) !important;
 }
 
 .form {
@@ -368,6 +471,14 @@ function urgencyHint(u: string) {
 .result {
   display: grid;
   gap: var(--space-4);
+}
+
+.output-pane > .empty {
+  min-height: 360px;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .urgency {
@@ -551,6 +662,14 @@ function urgencyHint(u: string) {
 }
 
 @media (max-width: 860px) {
+  .triage-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .input-pane {
+    position: static;
+  }
+
   .two {
     grid-template-columns: 1fr;
   }
