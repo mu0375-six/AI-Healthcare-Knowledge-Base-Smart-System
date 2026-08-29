@@ -1,34 +1,49 @@
 <template>
-  <div class="lab" :class="[flag, { compact }]">
-    <div class="lab-head">
-      <span class="lab-name">{{ type }}</span>
+  <div class="lab" :class="[flag, resolvedVariant]">
+    <div v-if="resolvedVariant === 'inline'" class="lab-inline">
       <span v-if="hasValue" class="lab-value num">
         {{ value }}<small>{{ shownUnit }}</small>
       </span>
       <span v-else class="lab-value num empty">—</span>
-    </div>
-
-    <!-- 有参考区间才画标尺；未知指标只显示数值，不编一条假的刻度 -->
-    <template v-if="band && hasValue">
-      <div class="lab-track" role="img" :aria-label="ariaLabel">
+      <div v-if="band && hasValue" class="lab-track" role="img" :aria-label="ariaLabel">
         <span class="lab-band" :style="{ left: bandLeft + '%', width: bandWidth + '%' }"></span>
         <span class="lab-tick" :style="{ left: bandLeft + '%' }"></span>
         <span class="lab-tick" :style="{ left: bandLeft + bandWidth + '%' }"></span>
         <span class="lab-mark" :style="{ left: markLeft + '%' }"></span>
       </div>
-      <div class="lab-scale num">
-        <span :style="{ left: bandLeft + '%' }">{{ band.low }}</span>
-        <span :style="{ left: bandLeft + bandWidth + '%' }">{{ band.high }}</span>
-      </div>
-      <div v-if="!compact" class="lab-foot">
-        <span class="chip" :class="flag">{{ flagText(flag) }}</span>
-        <span class="lab-ref">参考 <b class="num">{{ band.low }}–{{ band.high }}</b> {{ shownUnit }}</span>
-      </div>
-    </template>
+    </div>
 
-    <p v-else-if="!compact" class="lab-noref">
-      {{ hasValue ? '暂无该指标的参考区间' : '还没有记录' }}
-    </p>
+    <template v-else>
+      <div class="lab-head">
+        <span class="lab-name">{{ type }}</span>
+        <span v-if="hasValue" class="lab-value num">
+          {{ value }}<small>{{ shownUnit }}</small>
+        </span>
+        <span v-else class="lab-value num empty">—</span>
+      </div>
+
+      <!-- 有参考区间才画标尺；未知指标只显示数值，不编一条假的刻度 -->
+      <template v-if="band && hasValue">
+        <div class="lab-track" role="img" :aria-label="ariaLabel">
+          <span class="lab-band" :style="{ left: bandLeft + '%', width: bandWidth + '%' }"></span>
+          <span class="lab-tick" :style="{ left: bandLeft + '%' }"></span>
+          <span class="lab-tick" :style="{ left: bandLeft + bandWidth + '%' }"></span>
+          <span class="lab-mark" :style="{ left: markLeft + '%' }"></span>
+        </div>
+        <div v-if="resolvedVariant === 'full'" class="lab-scale num">
+          <span :style="{ left: bandLeft + '%' }">{{ band.low }}</span>
+          <span :style="{ left: bandLeft + bandWidth + '%' }">{{ band.high }}</span>
+        </div>
+        <div v-if="resolvedVariant === 'full'" class="lab-foot">
+          <span class="chip" :class="flag">{{ flagText(flag) }}</span>
+          <span class="lab-ref">参考 <b class="num">{{ band.low }}–{{ band.high }}</b> {{ shownUnit }}</span>
+        </div>
+      </template>
+
+      <p v-else-if="resolvedVariant === 'full'" class="lab-noref">
+        {{ hasValue ? '暂无该指标的参考区间' : '还没有记录' }}
+      </p>
+    </template>
   </div>
 </template>
 
@@ -52,6 +67,8 @@ const props = defineProps<{
   unit?: string
   /** 紧凑模式：只画标尺，不显示状态徽标与参考区间文字（用于密集列表） */
   compact?: boolean
+  /** 显式尺寸档位；compact 保留用于兼容已有调用。 */
+  variant?: 'full' | 'compact' | 'inline'
   /**
    * 区间覆盖。报告详情里的项目名是化验单原文（"谷丙转氨酶"这类），
    * 不在 MetricGuide 的表内，但报告自带 refRange 字符串 ——
@@ -62,6 +79,7 @@ const props = defineProps<{
   flagOverride?: string
 }>()
 
+const resolvedVariant = computed(() => props.variant || (props.compact ? 'compact' : 'full'))
 const band = computed(() => props.range ?? bandOf(props.type))
 const hasValue = computed(() => props.value != null && !Number.isNaN(Number(props.value)))
 const flag = computed(() => props.flagOverride || flagOf(props.type, props.value ?? null))
@@ -123,14 +141,14 @@ const ariaLabel = computed(() =>
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 /* 没有数值时不画标尺，也不留标尺的空位 —— 空卡片被撑成
    有数据卡片一样高，是"看起来坏了"的主要来源 */
 .lab:has(.lab-value.empty) .lab-head {
-  margin-bottom: 6px;
+  margin-bottom: var(--space-2);
 }
 
 .lab-name {
@@ -147,7 +165,7 @@ const ariaLabel = computed(() =>
 .lab-value {
   font-size: 26px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   line-height: 1;
   color: var(--tone);
   white-space: nowrap;
@@ -160,7 +178,7 @@ const ariaLabel = computed(() =>
 .lab-value small {
   font-size: 12px;
   font-weight: 500;
-  margin-left: 3px;
+  margin-left: var(--space-1);
   color: var(--ink-faint);
 }
 
@@ -168,7 +186,7 @@ const ariaLabel = computed(() =>
 .lab-track {
   position: relative;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--sunk);
 }
 
@@ -176,7 +194,7 @@ const ariaLabel = computed(() =>
   position: absolute;
   top: 0;
   bottom: 0;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--flag-normal);
   opacity: 0.28;
 }
@@ -190,7 +208,7 @@ const ariaLabel = computed(() =>
   transform: translateX(-50%);
   background: var(--flag-normal);
   opacity: 0.5;
-  border-radius: 1px;
+  border-radius: var(--r-pill);
 }
 
 /* 游标：当前值。带一圈底色描边，压在实心带上也分得清 */
@@ -201,9 +219,9 @@ const ariaLabel = computed(() =>
   height: 12px;
   margin-top: -6px;
   margin-left: -6px;
-  border-radius: 50%;
+  border-radius: var(--r-pill);
   background: var(--tone);
-  box-shadow: 0 0 0 3px var(--card), 0 1px 3px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 0 0 3px var(--card), var(--shadow-1);
   transition: left 0.5s var(--ease-out);
 }
 
@@ -211,7 +229,7 @@ const ariaLabel = computed(() =>
 .lab-scale {
   position: relative;
   height: 14px;
-  margin-top: 5px;
+  margin-top: var(--space-1);
   font-size: 11px;
   color: var(--ink-faint);
 }
@@ -225,8 +243,8 @@ const ariaLabel = computed(() =>
 .lab-foot {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .lab-ref {
@@ -245,11 +263,45 @@ const ariaLabel = computed(() =>
 }
 
 .lab.compact .lab-head {
-  margin-bottom: 9px;
+  margin-bottom: var(--space-2);
 }
 
 .lab.compact .lab-value {
   font-size: 20px;
+}
+
+.lab-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.lab.inline .lab-value {
+  font-size: 15px;
+}
+
+.lab.inline .lab-value small {
+  font-size: 11px;
+}
+
+.lab.inline .lab-track {
+  width: 84px;
+  height: 4px;
+  flex: 0 0 84px;
+}
+
+.lab.inline .lab-tick {
+  top: -1px;
+  bottom: -1px;
+}
+
+.lab.inline .lab-mark {
+  width: 9px;
+  height: 9px;
+  margin-top: -4.5px;
+  margin-left: -4.5px;
+  box-shadow: 0 0 0 2px var(--card), var(--shadow-1);
 }
 
 @media (prefers-reduced-motion: reduce) {

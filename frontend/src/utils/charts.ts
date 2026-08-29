@@ -1,14 +1,21 @@
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, LineChart, PieChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import {
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  MarkAreaComponent,
+  MarkLineComponent,
+} from 'echarts/components'
 
 /**
  * 图表调色板。canvas 里读不到 CSS 变量，只能给字面值 ——
  * 这里的值必须与 styles/index.css 的 token 手工保持一致：
  * 首色 = --accent，其余取自数据色与其邻近色相。
  */
-export const CHART_COLORS = ['#40614b', '#9c3b18', '#2f5d7c', '#8a6d3b', '#6b7f5e']
+export const CHART_COLORS = ['#40614b', '#7c8f6b', '#a89e93', '#5f6f7a', '#8f7f66']
+export const CHART_COLORS_DARK = ['#8fb89b', '#a8b795', '#8b8175', '#8fa3b0', '#b3a184']
 
 /**
  * 依当前主题返回 canvas 内不可用 CSS 的文字/轴线配色。
@@ -17,12 +24,15 @@ export const CHART_COLORS = ['#40614b', '#9c3b18', '#2f5d7c', '#8a6d3b', '#6b7f5
 export function chartTheme() {
   const dark = document.documentElement.classList.contains('dark')
   return {
+    colors: dark ? CHART_COLORS_DARK : CHART_COLORS,
     // 与 --ink-soft / --ink-mute 对齐
     label: dark ? '#b5aa9c' : '#564e45',
     axisLine: { lineStyle: { color: dark ? '#37302a' : '#ddd5c9' } },
     splitLine: {
       lineStyle: { color: dark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(34, 30, 26, 0.07)' },
     },
+    normalBand: dark ? 'rgba(143, 184, 155, 0.13)' : 'rgba(74, 115, 85, 0.10)',
+    normalLine: dark ? 'rgba(143, 184, 155, 0.42)' : 'rgba(74, 115, 85, 0.40)',
   }
 }
 
@@ -31,7 +41,17 @@ let installed = false
 /** ECharts 按需注册只做一次；各视图 import 本模块即完成注册。 */
 export function ensureCharts() {
   if (installed) return
-  use([CanvasRenderer, LineChart, BarChart, PieChart, GridComponent, TooltipComponent, LegendComponent])
+  use([
+    CanvasRenderer,
+    LineChart,
+    BarChart,
+    PieChart,
+    GridComponent,
+    TooltipComponent,
+    LegendComponent,
+    MarkAreaComponent,
+    MarkLineComponent,
+  ])
   installed = true
 }
 

@@ -1,38 +1,69 @@
 <template>
-  <section class="panel core-pad block">
-    <div class="sec">
+  <section class="panel core-pad">
+    <div class="section-head sec">
       <h3>指标趋势</h3>
       <div class="sec-btns">
-        <button class="btn btn-ghost slim" type="button" @click="importVisible = true">CSV 导入</button>
-        <button class="btn btn-ghost slim" type="button" :disabled="!metrics.length" @click="exportCsv">导出 CSV</button>
-        <button class="btn btn-ghost slim" type="button" @click="$emit('from-report')">从报告写入</button>
-        <button class="btn btn-primary slim" type="button" @click="openDialog">新增指标</button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="importVisible = true">CSV 导入</button>
+        <button class="btn btn-ghost btn-sm" type="button" :disabled="!metrics.length" @click="exportCsv">导出 CSV</button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="$emit('from-report')">从报告写入</button>
+        <button class="btn btn-primary btn-sm" type="button" @click="openDialog">新增指标</button>
       </div>
     </div>
     <ul v-if="trends.length" class="trend-list">
-      <li v-for="t in trends" :key="t.metricType" :class="{ alert: t.alert }">
-        <span class="dot" :class="t.latestFlag"></span>
-        <span class="note">{{ t.note }}</span>
+      <li v-for="t in trends" :key="t.metricType" :class="['flag-' + t.latestFlag, { alert: t.alert }]">
+        <span class="trend-copy">
+          <span class="dot" :class="t.latestFlag"></span>
+          <span class="note">{{ t.note }}</span>
+        </span>
+        <LabStrip
+          variant="inline"
+          :type="t.metricType"
+          :value="t.latest"
+          :unit="t.unit"
+          :flag-override="t.latestFlag"
+        />
       </li>
     </ul>
-<!-- 至少两个点才画图：一个点的折线图是一块 260px 高的空白，
-         下面的明细表已经把这条记录说清楚了 -->
-    <v-chart v-if="plottable" :option="chartOption" autoresize style="height: 260px" />
+    <!-- 不同单位分成小图：血糖不会再被血压的 0–100 量纲压平。 -->
+    <div v-if="plottable" class="trend-charts">
+      <article v-for="chart in chartOptions" :key="chart.name" class="trend-chart">
+        <div class="chart-head">
+          <b>{{ chart.name }}</b>
+          <span>{{ chart.unit }}</span>
+        </div>
+        <v-chart :option="chart.option" autoresize class="chart-canvas" />
+      </article>
+    </div>
     <div v-else class="quiet">还没有可绘图的指标。点「新增指标」，或用上面的「CSV 导入」一次性迁移历史记录。</div>
     <el-table v-if="metrics.length" :data="metrics" class="mt" empty-text="还没有指标">
-      <el-table-column prop="metricType" label="类型" width="120" />
-      <el-table-column prop="value" label="数值" width="90" />
-      <el-table-column prop="unit" label="单位" width="90" />
-      <el-table-column label="高低" width="80">
-        <template #default="{ row }">{{ flagText(flagOf(row.metricType, row.value)) }}</template>
-      </el-table-column>
-      <el-table-column label="记录时间">
-        <template #default="{ row }">{{ formatWhen(row.recordedAt) }}</template>
-      </el-table-column>
-      <el-table-column prop="note" label="备注" />
-      <el-table-column label="" width="80">
+      <el-table-column label="指标" min-width="180">
         <template #default="{ row }">
-          <el-button text type="danger" @click="$emit('delete-metric', row.id)">删除</el-button>
+          <span class="metric-label">
+            <b>{{ row.metricType }}</b>
+            <small v-if="row.unit">{{ row.unit }}</small>
+            <i v-if="row.note">{{ row.note }}</i>
+          </span>
+        </template>
+      </el-table-column>
+      <el-table-column label="数值与参考区间" min-width="230">
+        <template #default="{ row }">
+          <LabStrip variant="inline" :type="row.metricType" :value="row.value" :unit="row.unit" />
+        </template>
+      </el-table-column>
+      <el-table-column label="时间" min-width="190">
+        <template #default="{ row }">
+          <span class="metric-when">
+            <time>{{ formatWhen(row.recordedAt) }}</time>
+            <button
+              class="btn btn-quiet btn-sm metric-delete"
+              type="button"
+              :aria-label="`删除${row.metricType}在${formatWhen(row.recordedAt)}的记录`"
+              @click="$emit('delete-metric', row.id)"
+            >
+              <span aria-hidden="true" v-html="ICONS.trash"></span>
+              <span>删除</span>
+            </button>
+          </span>
         </template>
       </el-table-column>
     </el-table>
@@ -43,7 +74,7 @@
           v-for="t in metricTypes"
           :key="t"
           type="button"
-          class="qt"
+          class="chip-btn qt"
           :class="{ on: form.metricType === t }"
           @click="pickType(t)"
         >
@@ -77,7 +108,7 @@
       </p>
       <input ref="csvInput" type="file" accept=".csv,.txt" hidden @change="onCsvFile" />
       <div class="csv-pick">
-        <button class="btn btn-ghost slim" type="button" @click="csvInput?.click()">选择 CSV 文件</button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="csvInput?.click()">选择 CSV 文件</button>
         <span v-if="csvName">已读取 {{ csvName }}</span>
       </div>
 
@@ -86,7 +117,7 @@
         :title="csvError"
         type="error"
         :closable="false"
-        style="margin-top: 10px"
+        class="csv-alert"
       />
 
       <el-table v-if="previewRows.length" :data="pagedPreview" size="small" max-height="320" class="mt">
@@ -123,8 +154,10 @@ import VChart from 'vue-echarts'
 import type { HealthMetric, HealthProfile } from '@/api/types'
 import { addMetricsBatch, type MetricTrend } from '@/api/health'
 import { formatWhen } from '@/utils/format'
-import { flagOf, flagText, unitOf } from '@/utils/metrics'
-import { CHART_COLORS, chartTheme } from '@/utils/charts'
+import { bandOf, unitOf } from '@/utils/metrics'
+import { chartTheme } from '@/utils/charts'
+import { ICONS } from '@/utils/icons'
+import LabStrip from '@/components/LabStrip.vue'
 
 const props = defineProps<{
   profile: HealthProfile
@@ -341,14 +374,7 @@ function exportCsv() {
   URL.revokeObjectURL(a.href)
 }
 
-/** 有任一指标累计到两条以上记录，才谈得上"趋势"。 */
-const plottable = computed(() => {
-  const byType = new Map<string, number>()
-  for (const m of props.metrics) byType.set(m.metricType, (byType.get(m.metricType) || 0) + 1)
-  return [...byType.values()].some((n) => n >= 2)
-})
-
-const chartOption = computed(() => {
+const chartOptions = computed(() => {
   void themeTick.value
   const t = chartTheme()
   const groups = new Map<string, { t: string; v: number }[]>()
@@ -357,32 +383,69 @@ const chartOption = computed(() => {
     arr.push({ t: formatWhen(m.recordedAt), v: m.value })
     groups.set(m.metricType, arr)
   }
-  const times = Array.from(new Set([...groups.values()].flat().map((x) => x.t)))
-  return {
-    tooltip: { trigger: 'axis' },
-    legend: { data: Array.from(groups.keys()), textStyle: { color: t.label } },
-    grid: { left: 40, right: 16, top: 32, bottom: 28 },
-    xAxis: {
-      type: 'category',
-      data: times,
-      axisLabel: { color: t.label },
-      axisLine: t.axisLine,
-      axisTick: { show: false },
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: { color: t.label },
-      splitLine: t.splitLine,
-    },
-    series: Array.from(groups.entries()).map(([name, arr]) => ({
-      name,
-      type: 'line',
-      smooth: true,
-      data: times.map((t) => arr.find((x) => x.t === t)?.v ?? null),
-    })),
-    color: CHART_COLORS,
-  }
+  return Array.from(groups.entries())
+    .filter(([, arr]) => arr.length >= 2)
+    .map(([name, arr], index) => {
+      const band = bandOf(name)
+      const color = t.colors[index % t.colors.length]
+      return {
+        name,
+        unit: props.metrics.find((m) => m.metricType === name)?.unit || unitOf(name),
+        option: {
+          animationDuration: 400,
+          color: [color],
+          tooltip: { trigger: 'axis' },
+          grid: { left: 48, right: 16, top: 12, bottom: 30 },
+          xAxis: {
+            type: 'category',
+            boundaryGap: false,
+            data: arr.map((x) => x.t),
+            axisLabel: { color: t.label, hideOverlap: true },
+            axisLine: t.axisLine,
+            axisTick: { show: false },
+          },
+          yAxis: {
+            type: 'value',
+            scale: true,
+            axisLabel: { color: t.label },
+            axisLine: { show: false },
+            splitLine: t.splitLine,
+          },
+          series: [
+            {
+              name,
+              type: 'line',
+              smooth: true,
+              showSymbol: arr.length < 12,
+              symbolSize: 6,
+              data: arr.map((x) => x.v),
+              lineStyle: { width: 2, color },
+              itemStyle: { color },
+              ...(band
+                ? {
+                    markArea: {
+                      silent: true,
+                      itemStyle: { color: t.normalBand },
+                      data: [[{ yAxis: band.low }, { yAxis: band.high }]],
+                    },
+                    markLine: {
+                      silent: true,
+                      symbol: 'none',
+                      label: { show: false },
+                      lineStyle: { color: t.normalLine, type: 'dashed', width: 1 },
+                      data: [{ yAxis: band.low }, { yAxis: band.high }],
+                    },
+                  }
+                : {}),
+            },
+          ],
+        },
+      }
+    })
 })
+
+/** 单点记录由明细表表达，不用一块空图占版面。 */
+const plottable = computed(() => chartOptions.value.length > 0)
 
 // 暗色切换后重建配色（canvas 内文字不吃 CSS 变量，只能重算 option）
 const themeTick = ref(0)
@@ -396,89 +459,80 @@ defineExpose({ openDialog })
 </script>
 
 <style scoped>
-/* 趋势提示：连续超标的条目单独标红，这是这块最该被一眼看到的信息 */
 .trend-list {
   list-style: none;
-  margin: 0 0 14px;
+  margin: 0 0 var(--space-4);
   padding: 0;
   display: grid;
-  gap: 6px;
+  gap: var(--space-2);
 }
 .trend-list li {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   font-size: 13px;
   line-height: 1.6;
   color: var(--ink-soft);
 }
-.trend-list li.alert .note {
+.trend-copy {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.trend-list li.alert.flag-high .note {
   color: var(--flag-high);
+  font-weight: 600;
+}
+.trend-list li.alert.flag-low .note {
+  color: var(--flag-low);
   font-weight: 600;
 }
 .trend-list .dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-  margin-top: 7px;
+  border-radius: var(--r-pill);
+  margin-top: var(--space-2);
   flex: none;
   background: var(--ink-faint);
 }
-.trend-list .dot.high,
-.trend-list .dot.low {
+.trend-list .dot.high {
   background: var(--flag-high);
+}
+.trend-list .dot.low {
+  background: var(--flag-low);
 }
 .trend-list .dot.normal {
   background: var(--flag-normal);
 }
-.block {
-  margin-top: 14px;
-}
 .sec {
-  display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  gap: 10px;
   flex-wrap: wrap;
 }
 .sec-btns {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 .mt {
-  margin-top: 12px;
-}
-h3 {
-  margin: 0;
-  font-size: 20px;
+  margin-top: var(--space-4);
 }
 .quiet {
   color: var(--ink-faint);
   font-size: 13px;
   line-height: 1.7;
-  padding: 18px 0;
-}
-.slim {
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: var(--space-5) 0;
 }
 .quick-types {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 .qt {
-  border: 1px solid var(--edge-strong);
-  background: var(--sunk);
-  color: var(--ink-soft);
-  border-radius: 999px;
-  padding: 5px 14px;
   font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s ease;
 }
 .qt.on {
   border-color: var(--accent);
@@ -487,7 +541,7 @@ h3 {
   font-weight: 500;
 }
 .csv-hint {
-  margin: 0 0 10px;
+  margin: 0 0 var(--space-3);
   font-size: 13px;
   color: var(--ink-soft);
   line-height: 1.7;
@@ -495,13 +549,111 @@ h3 {
 .csv-pick {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   font-size: 13px;
   color: var(--ink-faint);
 }
 .csv-more {
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
   font-size: 12px;
   color: var(--ink-faint);
+}
+
+.csv-alert {
+  margin-top: var(--space-3);
+}
+
+.trend-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: var(--space-5);
+}
+
+.trend-chart {
+  min-width: 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--edge);
+}
+
+.chart-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.chart-head b {
+  font-size: 14px;
+}
+
+.chart-head span {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.chart-canvas {
+  height: 190px;
+}
+
+.metric-label,
+.metric-when {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.metric-label {
+  flex-wrap: wrap;
+}
+
+.metric-label b {
+  font-size: 14px;
+}
+
+.metric-label small,
+.metric-label i {
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.metric-label i {
+  width: 100%;
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-when {
+  justify-content: space-between;
+}
+
+.metric-when time {
+  color: var(--ink-mute);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.metric-delete {
+  color: var(--flag-high);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .metric-delete {
+    opacity: 0;
+  }
+
+  :deep(.el-table__row:hover) .metric-delete,
+  :deep(.el-table__row:focus-within) .metric-delete,
+  .metric-delete:focus-visible {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 720px) {
+  .trend-list li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>
