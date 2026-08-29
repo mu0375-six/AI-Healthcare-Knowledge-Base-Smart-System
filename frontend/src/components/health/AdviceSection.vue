@@ -1,8 +1,8 @@
 <template>
-  <section class="panel core-pad block">
-    <div class="sec">
+  <section class="panel core-pad">
+    <div class="section-head sec">
       <h3>健康建议</h3>
-      <button class="btn btn-ghost slim" type="button" :disabled="loading || !metrics.length" @click="$emit('generate')">
+      <button class="btn btn-ghost btn-sm" type="button" :disabled="loading || !metrics.length" @click="$emit('generate')">
         {{ loading ? '生成中…' : '为「' + profile.displayName + '」生成建议' }}
       </button>
     </div>
@@ -35,33 +35,20 @@ defineEmits<{
 </script>
 
 <style scoped>
-.block {
-  margin-top: 14px;
-}
 .sec {
-  display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  gap: 10px;
-}
-h3 {
-  margin: 0;
-  font-size: 20px;
-}
-.slim {
-  padding: 6px 12px;
-  font-size: 13px;
+  flex-wrap: wrap;
 }
 .basis {
   color: var(--ink-faint);
   font-size: 13px;
-  margin: 0 0 10px;
+  margin: 0 0 var(--space-3);
 }
 .quiet {
   color: var(--ink-faint);
   font-size: 13px;
   line-height: 1.7;
-  padding: 18px 0;
+  padding: var(--space-5) 0;
 }
 </style>

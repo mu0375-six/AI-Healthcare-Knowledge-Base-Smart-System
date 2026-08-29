@@ -1,30 +1,30 @@
 <template>
   <div class="page">
-    <header class="head">
-      <div>
-        <p class="eyebrow">家庭健康</p>
-        <h1>档案</h1>
+    <PageHeader kicker="家庭健康" title="档案">
+      <template #extra>
+        <button class="btn btn-primary" type="button" @click="createVisible = true">
+          <span aria-hidden="true" v-html="ICONS.plus"></span>新建档案
+        </button>
+      </template>
+    </PageHeader>
+
+    <div class="page-content">
+
+      <MemberBar
+        :profiles="profiles"
+        :active-id="currentId"
+        @select="select"
+        @create="createVisible = true"
+      />
+
+      <AlertCenter v-if="alerts.length" :alerts="alerts" :profiles="profiles" @locate="locateProfile" />
+
+      <div v-if="!current" class="panel empty">
+        <span aria-hidden="true" v-html="ICONS.file"></span>
+        <h3>为家人建立第一份档案</h3>
+        <p>比如「爸爸」「妈妈」或「小宝」。建好后记血压、血糖，或把体检报告传进来自动填。</p>
+        <button class="btn btn-primary" type="button" @click="createVisible = true">现在新建</button>
       </div>
-      <button class="btn btn-primary" type="button" @click="createVisible = true">
-        <span v-html="ICONS.plus"></span>新建档案
-      </button>
-    </header>
-
-    <MemberBar
-      :profiles="profiles"
-      :active-id="currentId"
-      @select="select"
-      @create="createVisible = true"
-    />
-
-    <AlertCenter v-if="alerts.length" :alerts="alerts" :profiles="profiles" @locate="locateProfile" />
-
-    <div v-if="!current" class="panel empty">
-      <span v-html="ICONS.file"></span>
-      <h3>为家人建立第一份档案</h3>
-      <p>比如「爸爸」「妈妈」或「小宝」。建好后记血压、血糖，或把体检报告传进来自动填。</p>
-      <button class="btn btn-primary" type="button" @click="createVisible = true">现在新建</button>
-    </div>
 
     <template v-else>
       <DossierCard
@@ -48,17 +48,28 @@
           class="tab"
           type="button"
           role="tab"
+          :id="`health-tab-${t.key}`"
           :aria-selected="tab === t.key"
+          :aria-controls="`health-panel-${t.key}`"
+          :tabindex="tab === t.key ? 0 : -1"
           :class="{ on: tab === t.key }"
           @click="setTab(t.key)"
+          @keydown="onTabKeydown($event, t.key)"
         >
           {{ t.label }}
-          <em v-if="t.count(counts)" class="num">{{ t.count(counts) }}</em>
+          <em class="num" :class="{ zero: t.count(counts) === 0 }">{{ t.count(counts) }}</em>
         </button>
       </div>
 
       <!-- 指标 -->
-      <section v-show="tab === 'metrics'" class="stack">
+      <section
+        id="health-panel-metrics"
+        v-show="tab === 'metrics'"
+        class="stack tab-panel"
+        role="tabpanel"
+        aria-labelledby="health-tab-metrics"
+        tabindex="0"
+      >
 <!-- 只为有数据的指标发卡。没记录过的合并成一行添加入口 ——
              一张写着"还没有记录"的空卡片不承载任何信息，只占版面。 -->
         <div v-if="filledCards.length" class="cards">
@@ -71,7 +82,7 @@
         </div>
 
         <button v-if="emptyTypes.length" class="add-row" type="button" @click="openAdd">
-          <span class="add-ico" v-html="ICONS.plus"></span>
+          <span class="add-ico" aria-hidden="true" v-html="ICONS.plus"></span>
           <span class="add-txt">
             <b>还可以记录：{{ emptyTypes.join(' · ') }}</b>
             <i>记两次以上才看得出走势</i>
@@ -79,6 +90,7 @@
         </button>
 
         <MetricTrendSection
+          id="metric-trend"
           ref="trendSection"
           :profile="current"
           :metrics="metrics"
@@ -92,23 +104,29 @@
 
       <!-- 报告：原「报告解读」页并入这里。上传报告产出的指标本来
            就写进档案，拆成两个目的地会让一条流程跨页。 -->
-      <section v-show="tab === 'reports'" class="shell">
-        <div class="section-head">
+      <Shell
+        id="health-panel-reports"
+        v-show="tab === 'reports'"
+        role="tabpanel"
+        aria-labelledby="health-tab-reports"
+        tabindex="0"
+      >
+        <template #head>
           <h3>体检与化验报告</h3>
           <router-link
             class="spacer btn btn-primary btn-sm"
             :to="{ path: '/reports/upload', query: { profileId: String(currentId) } }"
           >
-            <span v-html="ICONS.upload"></span>上传报告
+            <span aria-hidden="true" v-html="ICONS.upload"></span>上传报告
           </router-link>
-        </div>
+        </template>
 
         <div v-if="reportsLoading" class="stack">
           <div v-for="n in 3" :key="n" class="skeleton" style="height: 58px; border-radius: var(--r-card)"></div>
         </div>
 
         <div v-else-if="!reports.length" class="empty">
-          <span v-html="ICONS.report"></span>
+          <span aria-hidden="true" v-html="ICONS.report"></span>
           <h3>还没有报告</h3>
           <p>传一份体检单或化验单，系统会抽出指标、标出高低，并写进这份档案。</p>
           <router-link
@@ -124,22 +142,36 @@
           type="button"
           @click="router.push('/reports/' + r.id)"
         >
-          <span class="rep-ico" v-html="ICONS.report"></span>
+          <span class="rep-ico" aria-hidden="true" v-html="ICONS.report"></span>
           <span class="rep-main">
             <b>{{ r.filename }}</b>
             <i v-if="r.summary">{{ brief(r.summary) }}</i>
           </span>
           <time>{{ formatWhen(r.createdAt) }}</time>
         </button>
-      </section>
+      </Shell>
 
       <!-- 病史 -->
-      <section v-show="tab === 'history'">
+      <section
+        id="health-panel-history"
+        v-show="tab === 'history'"
+        class="tab-panel"
+        role="tabpanel"
+        aria-labelledby="health-tab-history"
+        tabindex="0"
+      >
         <HistorySection :profile="current" :histories="histories" @add="onAddHist" @delete-history="onDelHist" />
       </section>
 
       <!-- 建议 -->
-      <section v-show="tab === 'advice'">
+      <section
+        id="health-panel-advice"
+        v-show="tab === 'advice'"
+        class="tab-panel"
+        role="tabpanel"
+        aria-labelledby="health-tab-advice"
+        tabindex="0"
+      >
         <AdviceSection
           :profile="current"
           :metrics="metrics"
@@ -159,11 +191,12 @@
       @create="onCreate"
     />
     <MedicalDisclaimer />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -191,6 +224,8 @@ import { useTerms } from '@/composables/useTerms'
 import { ICONS } from '@/utils/icons'
 import LabStrip from '@/components/LabStrip.vue'
 import MedicalDisclaimer from '@/components/MedicalDisclaimer.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import Shell from '@/components/Shell.vue'
 import MemberBar from '@/components/health/MemberBar.vue'
 import AlertCenter from '@/components/health/AlertCenter.vue'
 import DossierCard from '@/components/health/DossierCard.vue'
@@ -221,30 +256,50 @@ const current = computed(() => profiles.value.find((p) => p.id === currentId.val
 const { terms, loadTerms } = useTerms()
 
 type TabKey = 'metrics' | 'reports' | 'history' | 'advice'
-const TABS: { key: TabKey; label: string; count: (c: Counts) => number | string }[] = [
+const TABS: { key: TabKey; label: string; count: (c: Counts) => number }[] = [
   { key: 'metrics', label: '指标', count: (c) => c.metrics },
   { key: 'reports', label: '报告', count: (c) => c.reports },
   { key: 'history', label: '病史', count: (c) => c.histories },
-  { key: 'advice', label: '建议', count: () => '' },
+  { key: 'advice', label: '建议', count: (c) => c.advice },
 ]
-type Counts = { metrics: number; reports: number; histories: number }
+type Counts = { metrics: number; reports: number; histories: number; advice: number }
 const counts = computed<Counts>(() => ({
   metrics: metrics.value.length,
   reports: reports.value.length,
   histories: histories.value.length,
+  advice: advice.value ? 1 : 0,
 }))
 
 // tab 存在 query 里：/reports 的重定向要能直接落到报告分段，
 // 刷新与前进后退也保持在同一分段。
-const tab = ref<TabKey>((route.query.tab as TabKey) || 'metrics')
+function isTabKey(value: unknown): value is TabKey {
+  return TABS.some((item) => item.key === value)
+}
+
+const tab = ref<TabKey>(isTabKey(route.query.tab) ? route.query.tab : 'metrics')
 function setTab(k: TabKey) {
   tab.value = k
   router.replace({ query: { ...route.query, tab: k } })
 }
+
+function onTabKeydown(event: KeyboardEvent, key: TabKey) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  const index = TABS.findIndex((item) => item.key === key)
+  const nextIndex =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? TABS.length - 1
+        : (index + (event.key === 'ArrowRight' ? 1 : -1) + TABS.length) % TABS.length
+  const nextKey = TABS[nextIndex].key
+  setTab(nextKey)
+  nextTick(() => document.getElementById(`health-tab-${nextKey}`)?.focus())
+}
 watch(
   () => route.query.tab,
   (v) => {
-    if (v && v !== tab.value) tab.value = v as TabKey
+    if (isTabKey(v) && v !== tab.value) tab.value = v
   },
 )
 
@@ -388,6 +443,9 @@ async function locateProfile(profileId: number | null) {
   if (profileId && profileId !== currentId.value) {
     await select(profileId)
   }
+  setTab('metrics')
+  await nextTick()
+  document.getElementById('metric-trend')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 async function onDelMetric(id: number) {
@@ -423,29 +481,18 @@ async function onAdvice() {
 </script>
 
 <style scoped>
-.page {
+.page-content {
   display: grid;
-  gap: 20px;
-}
-
-.head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.head h1 {
-  margin-top: 4px;
+  gap: var(--space-5);
 }
 
 /* ---- 分段 ---- */
 .tabs {
   display: flex;
-  gap: 4px;
-  padding: 4px;
+  gap: var(--space-1);
+  padding: var(--space-1);
   background: var(--sunk);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   width: fit-content;
   max-width: 100%;
   overflow-x: auto;
@@ -459,12 +506,12 @@ async function onAdvice() {
 .tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   border: 0;
   background: none;
   cursor: pointer;
-  padding: 7px 16px;
-  border-radius: 999px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--r-pill);
   color: var(--ink-mute);
   font-size: 14px;
   font-weight: 550;
@@ -484,6 +531,11 @@ async function onAdvice() {
   color: var(--ink-faint);
 }
 
+.tab em.zero {
+  color: var(--ink-faint);
+  opacity: 0.7;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .tab:not(.on):hover {
     color: var(--ink);
@@ -494,17 +546,17 @@ async function onAdvice() {
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
   /* 按内容定高：没数据的卡片不该被有数据的撑成同样高 */
   align-items: start;
 }
 
 .card-pad {
-  padding: 16px 18px 14px;
+  padding: var(--space-4) var(--space-5);
 }
 
 .delta {
-  margin-top: 10px;
+  margin-top: var(--space-3);
   font-size: 12px;
   color: var(--ink-faint);
 }
@@ -513,9 +565,9 @@ async function onAdvice() {
 .add-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   width: 100%;
-  padding: 14px 16px;
+  padding: var(--space-4);
   border: 1.5px dashed var(--edge-strong);
   border-radius: var(--r-card);
   background: transparent;
@@ -542,7 +594,7 @@ async function onAdvice() {
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: var(--r-avatar);
   background: var(--tray);
   color: var(--ink-mute);
   flex-shrink: 0;
@@ -565,7 +617,7 @@ async function onAdvice() {
   font-style: normal;
   font-size: 12px;
   color: var(--ink-faint);
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 
 /* ---- 报告行 ---- */
@@ -573,12 +625,12 @@ async function onAdvice() {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   text-align: left;
   background: none;
   border: 0;
   border-top: 1px solid var(--edge);
-  padding: 13px 2px;
+  padding: var(--space-3) var(--space-1);
   cursor: pointer;
   color: var(--ink);
   transition: color 0.15s ease;
@@ -620,7 +672,7 @@ async function onAdvice() {
   font-style: normal;
   color: var(--ink-faint);
   font-size: 12px;
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 
 .rep time {
@@ -630,20 +682,15 @@ async function onAdvice() {
 }
 
 @media (max-width: 720px) {
-  .head {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 12px;
-  }
   .cards {
     grid-template-columns: 1fr;
   }
   .rep {
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--space-2);
   }
   .rep time {
-    margin-left: 32px;
+    margin-left: var(--space-6);
   }
 }
 </style>

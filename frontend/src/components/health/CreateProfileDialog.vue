@@ -1,7 +1,7 @@
 <template>
   <el-dialog :model-value="visible" title="给谁建档" width="440px" @update:model-value="$emit('close')">
     <div class="quick">
-      <button v-for="q in quickRels" :key="q.relation" type="button" @click="pick(q)">{{ q.label }}</button>
+      <button v-for="q in quickRels" :key="q.relation" class="chip-btn" type="button" @click="pick(q)">{{ q.label }}</button>
     </div>
     <el-form label-width="80px">
       <el-form-item label="称呼"><el-input v-model="form.displayName" placeholder="如：爸爸" /></el-form-item>
@@ -72,14 +72,7 @@ function submit() {
 .quick {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.quick button {
-  border: 1px solid var(--edge-strong);
-  background: var(--sunk);
-  border-radius: 999px;
-  padding: 6px 12px;
-  cursor: pointer;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 </style>

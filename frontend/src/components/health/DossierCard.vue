@@ -13,8 +13,8 @@
         <p v-if="profile.allergies" class="allergy">过敏：{{ profile.allergies }}</p>
       </div>
       <div class="who-actions">
-        <button class="btn btn-primary slim" type="button" @click="$emit('ask')">结合档案去问</button>
-        <button class="btn btn-ghost slim" type="button" @click="$emit('toggle-edit')">
+        <button class="btn btn-primary btn-sm" type="button" @click="$emit('ask')">结合档案去问</button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="$emit('toggle-edit')">
           {{ editing ? '收起资料' : '编辑资料' }}
         </button>
       </div>
@@ -43,8 +43,8 @@
         <span class="tip">仅管理员可读，默认关闭</span>
       </el-form-item>
       <div class="form-bar">
-        <button class="btn btn-ghost slim" type="button" @click="$emit('save')">保存资料</button>
-        <button v-if="removable" class="btn btn-ghost slim" type="button" @click="$emit('delete')">删除此档案</button>
+        <button class="btn btn-ghost btn-sm" type="button" @click="$emit('save')">保存资料</button>
+        <button v-if="removable" class="btn btn-ghost btn-sm" type="button" @click="$emit('delete')">删除此档案</button>
       </div>
     </el-form>
   </section>
@@ -77,11 +77,11 @@ const bmi = computed(() => bmiOf(props.profile.heightCm, props.profile.weightKg)
 <style scoped>
 .dossier .who {
   display: flex;
-  gap: 14px;
+  gap: var(--space-4);
   align-items: flex-start;
 }
 .dossier h3 {
-  margin: 0 0 4px;
+  margin: 0 0 var(--space-1);
   font-size: 24px;
 }
 .dossier p {
@@ -89,13 +89,13 @@ const bmi = computed(() => bmiOf(props.profile.heightCm, props.profile.weightKg)
   color: var(--ink-faint);
 }
 .allergy {
-  margin-top: 6px !important;
+  margin-top: var(--space-2) !important;
   color: var(--accent-hover) !important;
 }
 .who-actions {
   margin-left: auto;
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-shrink: 0;
 }
 .av {
@@ -111,20 +111,16 @@ const bmi = computed(() => bmiOf(props.profile.heightCm, props.profile.weightKg)
   flex-shrink: 0;
 }
 .form {
-  margin-top: 18px;
-  padding-top: 12px;
+  margin-top: var(--space-5);
+  padding-top: var(--space-3);
   border-top: 1px solid var(--edge);
 }
 .form-bar {
   display: flex;
-  gap: 10px;
+  gap: var(--space-3);
 }
 .tip {
   color: var(--ink-faint);
-  font-size: 13px;
-}
-.slim {
-  padding: 6px 12px;
   font-size: 13px;
 }
 @media (max-width: 900px) {

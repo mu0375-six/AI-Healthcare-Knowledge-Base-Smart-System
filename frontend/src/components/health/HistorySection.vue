@@ -1,8 +1,8 @@
 <template>
-  <section class="panel core-pad block">
-    <div class="sec">
+  <section class="panel core-pad">
+    <div class="section-head sec">
       <h3>病史</h3>
-      <button class="btn btn-primary slim" type="button" @click="visible = true">新增病史</button>
+      <button class="btn btn-primary btn-sm" type="button" @click="visible = true">新增病史</button>
     </div>
     <el-table :data="histories" empty-text="还没有病史，可点「新增病史」">
       <el-table-column prop="disease" label="疾病" />
@@ -11,7 +11,7 @@
       <el-table-column prop="note" label="备注" />
       <el-table-column label="" width="80">
         <template #default="{ row }">
-          <el-button text type="danger" @click="$emit('delete-history', row.id)">删除</el-button>
+          <button class="btn btn-quiet btn-sm delete-history" type="button" @click="$emit('delete-history', row.id)">删除</button>
         </template>
       </el-table-column>
     </el-table>
@@ -62,22 +62,12 @@ function submit() {
 </script>
 
 <style scoped>
-.block {
-  margin-top: 14px;
-}
 .sec {
-  display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  gap: 10px;
+  flex-wrap: wrap;
 }
-h3 {
-  margin: 0;
-  font-size: 20px;
-}
-.slim {
-  padding: 6px 12px;
-  font-size: 13px;
+.delete-history {
+  color: var(--flag-high);
 }
 </style>
