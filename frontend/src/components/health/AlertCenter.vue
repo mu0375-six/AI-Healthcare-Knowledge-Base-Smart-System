@@ -1,5 +1,5 @@
 <template>
-  <section class="panel alerts-panel" aria-labelledby="alert-title">
+  <section class="panel alerts-panel" :class="{ urgent: warningCount > 0 }" aria-labelledby="alert-title">
     <div class="toolbar">
       <button
         type="button"
@@ -8,9 +8,13 @@
         aria-controls="alert-list"
         @click="expanded = !expanded"
       >
+        <span class="alert-symbol" aria-hidden="true">!</span>
         <span class="title">
-          <span class="badge" :class="{ hot: warningCount > 0 }">{{ alertItems.length }}</span>
-          <span id="alert-title" class="heading">异常提醒</span>
+          <span class="title-line">
+            <span id="alert-title" class="heading">异常监测</span>
+            <span class="badge" :class="{ hot: warningCount > 0 }">{{ alertItems.length }}</span>
+            <span v-if="warningCount" class="warning-count">{{ warningCount }} 项需复查</span>
+          </span>
           <span class="sub">连续 {{ '≥' }} 3 次超出参考范围会升级为「需复查」</span>
         </span>
         <svg viewBox="0 0 24 24" class="chev" :class="{ up: expanded }" aria-hidden="true" focusable="false">
@@ -32,9 +36,10 @@
           class="item"
           :class="{ done: isDone(a), watch: a.severity === 'watch' }"
         >
-          <span class="sev">
-            {{ a.severity === 'warning' ? '需复查' : '待观察' }}
-          </span>
+          <div class="severity-block">
+            <span class="sev">{{ a.severity === 'warning' ? '需复查' : '待观察' }}</span>
+            <small class="num">连续 {{ a.consecutiveAbnormal }} 次</small>
+          </div>
           <div class="body">
             <div class="line-1">
               <b>{{ a.metricType }}</b>
@@ -49,8 +54,7 @@
               />
             </div>
             <p class="line-2">
-              最近一次{{ flagTextOf(a.flag) }}，已连续 {{ a.consecutiveAbnormal }} 次超范围（共 {{ a.samples }} 次记录）·
-              {{ a.recordedAt }}
+              最近一次{{ flagTextOf(a.flag) }} · 共 {{ a.samples }} 次记录 · {{ a.recordedAt }}
             </p>
           </div>
           <div class="actions">
@@ -141,13 +145,25 @@ function flagTextOf(flag: string) {
 
 <style scoped>
 .alerts-panel {
+  position: relative;
   overflow: hidden;
+}
+.alerts-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--flag-none);
+}
+.alerts-panel.urgent::before {
+  background: var(--flag-high);
 }
 .toolbar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-5);
+  background: var(--flag-none-wash);
 }
 .head {
   display: flex;
@@ -164,17 +180,35 @@ function flagTextOf(flag: string) {
   cursor: pointer;
   user-select: none;
 }
+.alert-symbol {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border: 1px solid var(--flag-high-line);
+  border-radius: var(--r-avatar);
+  background: var(--flag-high-wash);
+  color: var(--flag-high);
+  font-size: 15px;
+  font-weight: 750;
+}
 .title {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: 2px;
   flex: 1;
   min-width: 0;
 }
+.title-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
 .badge {
-  min-width: 22px;
-  height: 22px;
-  border-radius: var(--r-pill);
+  min-width: 20px;
+  height: 20px;
+  border-radius: var(--r-chip);
   background: var(--sunk);
   color: var(--ink-soft);
   font-size: 12px;
@@ -189,16 +223,19 @@ function flagTextOf(flag: string) {
   color: var(--on-accent);
 }
 .heading {
-  font-size: 16.5px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 680;
   white-space: nowrap;
+}
+.warning-count {
+  color: var(--flag-high);
+  font-size: 11px;
+  font-weight: 650;
 }
 .sub {
   font-size: 12px;
   color: var(--ink-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
 }
 .chev {
   width: 18px;
@@ -216,17 +253,29 @@ function flagTextOf(flag: string) {
   overflow-y: auto;
 }
 .item {
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-5);
+  padding: var(--space-3) var(--space-5) var(--space-3) calc(var(--space-5) + 4px);
   border-top: 1px solid var(--edge);
+  background: var(--flag-high-wash);
+}
+.item.watch {
+  background: transparent;
 }
 .item:first-child {
   border-top: 0;
 }
-.item.done .body {
-  opacity: 0.45;
+.item.done .body,
+.item.done .severity-block {
+  opacity: 0.48;
+}
+.severity-block {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
 }
 .sev {
   flex-shrink: 0;
@@ -237,8 +286,12 @@ function flagTextOf(flag: string) {
   border: 1px solid var(--flag-high-line);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--r-chip);
-  width: 52px;
+  min-width: 56px;
   text-align: center;
+}
+.severity-block small {
+  color: var(--ink-faint);
+  font-size: 10px;
 }
 .item.watch .sev {
   color: var(--flag-none);
@@ -257,6 +310,7 @@ function flagTextOf(flag: string) {
 }
 .line-1 b {
   font-size: 14px;
+  font-weight: 680;
 }
 .line-1 i {
   font-style: normal;
@@ -269,7 +323,8 @@ function flagTextOf(flag: string) {
 .line-2 {
   margin: var(--space-1) 0 0;
   font-size: 12px;
-  color: var(--ink-faint);
+  color: var(--ink-mute);
+  line-height: 1.55;
 }
 .actions {
   display: flex;
@@ -301,8 +356,15 @@ function flagTextOf(flag: string) {
   .sub {
     display: none;
   }
-  .item {
+  .toolbar {
+    padding: var(--space-3) var(--space-4);
+  }
+  .title-line {
     flex-wrap: wrap;
+  }
+  .item {
+    grid-template-columns: 64px minmax(0, 1fr);
+    padding: var(--space-3) var(--space-4);
   }
   .body {
     min-width: min(100%, 240px);
@@ -312,8 +374,37 @@ function flagTextOf(flag: string) {
     margin-left: 0;
   }
   .actions {
+    grid-column: 1 / -1;
     width: 100%;
     justify-content: flex-end;
+  }
+}
+
+@media (max-width: 460px) {
+  .alert-symbol {
+    display: none;
+  }
+
+  .warning-count {
+    width: 100%;
+  }
+
+  .item {
+    grid-template-columns: 1fr;
+  }
+
+  .severity-block {
+    display: flex;
+    align-items: center;
+  }
+
+  .actions {
+    grid-column: 1;
+    justify-content: stretch;
+  }
+
+  .actions .btn {
+    flex: 1;
   }
 }
 </style>

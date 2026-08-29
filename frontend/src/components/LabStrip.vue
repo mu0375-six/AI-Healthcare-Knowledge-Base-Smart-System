@@ -6,9 +6,11 @@
       </span>
       <span v-else class="lab-value num empty">—</span>
       <div v-if="band && hasValue" class="lab-track" role="img" :aria-label="ariaLabel">
+        <span class="lab-zone lab-zone-low" :style="{ width: bandLeft + '%' }"></span>
         <span class="lab-band" :style="{ left: bandLeft + '%', width: bandWidth + '%' }"></span>
+        <span class="lab-zone lab-zone-high" :style="{ left: bandRight + '%', width: highWidth + '%' }"></span>
         <span class="lab-tick" :style="{ left: bandLeft + '%' }"></span>
-        <span class="lab-tick" :style="{ left: bandLeft + bandWidth + '%' }"></span>
+        <span class="lab-tick" :style="{ left: bandRight + '%' }"></span>
         <span class="lab-mark" :style="{ left: markLeft + '%' }"></span>
       </div>
     </div>
@@ -25,9 +27,11 @@
       <!-- 有参考区间才画标尺；未知指标只显示数值，不编一条假的刻度 -->
       <template v-if="band && hasValue">
         <div class="lab-track" role="img" :aria-label="ariaLabel">
+          <span class="lab-zone lab-zone-low" :style="{ width: bandLeft + '%' }"></span>
           <span class="lab-band" :style="{ left: bandLeft + '%', width: bandWidth + '%' }"></span>
+          <span class="lab-zone lab-zone-high" :style="{ left: bandRight + '%', width: highWidth + '%' }"></span>
           <span class="lab-tick" :style="{ left: bandLeft + '%' }"></span>
-          <span class="lab-tick" :style="{ left: bandLeft + bandWidth + '%' }"></span>
+          <span class="lab-tick" :style="{ left: bandRight + '%' }"></span>
           <span class="lab-mark" :style="{ left: markLeft + '%' }"></span>
         </div>
         <div v-if="resolvedVariant === 'full'" class="lab-scale num">
@@ -109,6 +113,8 @@ function pct(x: number) {
 
 const bandLeft = computed(() => (band.value ? pct(band.value.low) : 0))
 const bandWidth = computed(() => (band.value ? pct(band.value.high) - pct(band.value.low) : 0))
+const bandRight = computed(() => bandLeft.value + bandWidth.value)
+const highWidth = computed(() => Math.max(0, 100 - bandRight.value))
 const markLeft = computed(() => (hasValue.value ? pct(Number(props.value)) : 0))
 
 // 标尺是图形，读屏用户需要等价的文字描述
@@ -142,7 +148,7 @@ const ariaLabel = computed(() =>
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 /* 没有数值时不画标尺，也不留标尺的空位 —— 空卡片被撑成
@@ -152,9 +158,9 @@ const ariaLabel = computed(() =>
 }
 
 .lab-name {
-  font-size: 14px;
-  font-weight: 550;
-  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink-mute);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -163,8 +169,8 @@ const ariaLabel = computed(() =>
 
 /* 数值是这张卡的主角：等宽、大字号、随高低着色 */
 .lab-value {
-  font-size: 26px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 680;
   letter-spacing: 0;
   line-height: 1;
   color: var(--tone);
@@ -185,18 +191,36 @@ const ariaLabel = computed(() =>
 /* 轨道：整条是"可能的取值范围"，实心带是正常区间 */
 .lab-track {
   position: relative;
-  height: 6px;
+  height: 9px;
   border-radius: var(--r-pill);
   background: var(--sunk);
+  box-shadow: inset 0 0 0 1px var(--edge);
+  overflow: visible;
+}
+
+.lab-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.lab-zone-low {
+  left: 0;
+  border-radius: var(--r-pill) 0 0 var(--r-pill);
+  background: var(--flag-low-wash);
+}
+
+.lab-zone-high {
+  border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  background: var(--flag-high-wash);
 }
 
 .lab-band {
   position: absolute;
   top: 0;
   bottom: 0;
-  border-radius: var(--r-pill);
-  background: var(--flag-normal);
-  opacity: 0.28;
+  background: var(--flag-normal-wash);
+  box-shadow: inset 0 0 0 1px var(--flag-normal-line);
 }
 
 /* 区间两端的界桩 */
@@ -204,10 +228,10 @@ const ariaLabel = computed(() =>
   position: absolute;
   top: -2px;
   bottom: -2px;
-  width: 1.5px;
+  width: 2px;
   transform: translateX(-50%);
   background: var(--flag-normal);
-  opacity: 0.5;
+  opacity: 0.72;
   border-radius: var(--r-pill);
 }
 
@@ -215,21 +239,22 @@ const ariaLabel = computed(() =>
 .lab-mark {
   position: absolute;
   top: 50%;
-  width: 12px;
-  height: 12px;
-  margin-top: -6px;
-  margin-left: -6px;
+  width: 13px;
+  height: 13px;
+  margin-top: -6.5px;
+  margin-left: -6.5px;
   border-radius: var(--r-pill);
   background: var(--tone);
-  box-shadow: 0 0 0 3px var(--card), var(--shadow-1);
-  transition: left 0.5s var(--ease-out);
+  border: 2px solid var(--card);
+  box-shadow: 0 0 0 1px var(--tone), var(--shadow-1);
+  transition: left 0.18s var(--ease-out);
 }
 
 /* 刻度数字贴在界桩下方 */
 .lab-scale {
   position: relative;
   height: 14px;
-  margin-top: var(--space-1);
+  margin-top: var(--space-2);
   font-size: 11px;
   color: var(--ink-faint);
 }
@@ -244,7 +269,7 @@ const ariaLabel = computed(() =>
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 .lab-ref {
@@ -270,6 +295,10 @@ const ariaLabel = computed(() =>
   font-size: 20px;
 }
 
+.lab.compact .lab-track {
+  height: 6px;
+}
+
 .lab-inline {
   display: inline-flex;
   align-items: center;
@@ -286,9 +315,9 @@ const ariaLabel = computed(() =>
 }
 
 .lab.inline .lab-track {
-  width: 84px;
-  height: 4px;
-  flex: 0 0 84px;
+  width: 96px;
+  height: 5px;
+  flex: 0 0 96px;
 }
 
 .lab.inline .lab-tick {
@@ -301,7 +330,15 @@ const ariaLabel = computed(() =>
   height: 9px;
   margin-top: -4.5px;
   margin-left: -4.5px;
-  box-shadow: 0 0 0 2px var(--card), var(--shadow-1);
+  border-width: 1px;
+  box-shadow: 0 0 0 1px var(--tone), var(--shadow-1);
+}
+
+@media (max-width: 480px) {
+  .lab.inline .lab-track {
+    width: 82px;
+    flex-basis: 82px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

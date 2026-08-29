@@ -1,72 +1,104 @@
 <template>
-  <section class="panel core-pad">
-    <div class="section-head sec">
-      <h3>指标趋势</h3>
+  <section class="panel metric-workbench" aria-labelledby="metric-workbench-title">
+    <header class="workbench-head">
+      <div class="workbench-title">
+        <span>纵向健康记录</span>
+        <div>
+          <h3 id="metric-workbench-title">指标趋势与明细</h3>
+          <small class="num">{{ metrics.length }} 条记录 · {{ chartOptions.length }} 项可绘制趋势</small>
+        </div>
+      </div>
       <div class="sec-btns">
-        <button class="btn btn-ghost btn-sm" type="button" @click="importVisible = true">CSV 导入</button>
-        <button class="btn btn-ghost btn-sm" type="button" :disabled="!metrics.length" @click="exportCsv">导出 CSV</button>
-        <button class="btn btn-ghost btn-sm" type="button" @click="$emit('from-report')">从报告写入</button>
+        <div class="data-actions">
+          <button class="btn btn-ghost btn-sm" type="button" @click="importVisible = true">CSV 导入</button>
+          <button class="btn btn-ghost btn-sm" type="button" :disabled="!metrics.length" @click="exportCsv">导出 CSV</button>
+          <button class="btn btn-ghost btn-sm" type="button" @click="$emit('from-report')">从报告写入</button>
+        </div>
         <button class="btn btn-primary btn-sm" type="button" @click="openDialog">新增指标</button>
       </div>
+    </header>
+
+    <div v-if="trends.length" class="trend-summary">
+      <span class="summary-label">最新状态</span>
+      <ul class="trend-list">
+        <li v-for="t in trends" :key="t.metricType" :class="['flag-' + t.latestFlag, { alert: t.alert }]">
+          <span class="trend-copy">
+            <span class="dot" :class="t.latestFlag"></span>
+            <span class="note">{{ t.note }}</span>
+          </span>
+          <LabStrip
+            variant="inline"
+            :type="t.metricType"
+            :value="t.latest"
+            :unit="t.unit"
+            :flag-override="t.latestFlag"
+          />
+        </li>
+      </ul>
     </div>
-    <ul v-if="trends.length" class="trend-list">
-      <li v-for="t in trends" :key="t.metricType" :class="['flag-' + t.latestFlag, { alert: t.alert }]">
-        <span class="trend-copy">
-          <span class="dot" :class="t.latestFlag"></span>
-          <span class="note">{{ t.note }}</span>
-        </span>
-        <LabStrip
-          variant="inline"
-          :type="t.metricType"
-          :value="t.latest"
-          :unit="t.unit"
-          :flag-override="t.latestFlag"
-        />
-      </li>
-    </ul>
-    <!-- 不同单位分成小图：血糖不会再被血压的 0–100 量纲压平。 -->
-    <div v-if="plottable" class="trend-charts">
-      <article v-for="chart in chartOptions" :key="chart.name" class="trend-chart">
-        <div class="chart-head">
-          <b>{{ chart.name }}</b>
-          <span>{{ chart.unit }}</span>
+
+    <section class="trend-block" aria-labelledby="trend-chart-title">
+      <div class="subsection-head">
+        <div>
+          <h4 id="trend-chart-title">时间趋势</h4>
+          <span>参考范围以绿色带标记</span>
         </div>
-        <v-chart :option="chart.option" autoresize class="chart-canvas" />
-      </article>
-    </div>
-    <div v-else class="quiet">还没有可绘图的指标。点「新增指标」，或用上面的「CSV 导入」一次性迁移历史记录。</div>
-    <el-table v-if="metrics.length" :data="metrics" class="mt" empty-text="还没有指标">
-      <el-table-column label="指标" min-width="180">
-        <template #default="{ row }">
-          <span class="metric-label">
-            <b>{{ row.metricType }}</b>
-            <small v-if="row.unit">{{ row.unit }}</small>
-            <i v-if="row.note">{{ row.note }}</i>
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="数值与参考区间" min-width="230">
-        <template #default="{ row }">
-          <LabStrip variant="inline" :type="row.metricType" :value="row.value" :unit="row.unit" />
-        </template>
-      </el-table-column>
-      <el-table-column label="时间" min-width="190">
-        <template #default="{ row }">
-          <span class="metric-when">
-            <time>{{ formatWhen(row.recordedAt) }}</time>
-            <button
-              class="btn btn-quiet btn-sm metric-delete"
-              type="button"
-              :aria-label="`删除${row.metricType}在${formatWhen(row.recordedAt)}的记录`"
-              @click="$emit('delete-metric', row.id)"
-            >
-              <span aria-hidden="true" v-html="ICONS.trash"></span>
-              <span>删除</span>
-            </button>
-          </span>
-        </template>
-      </el-table-column>
-    </el-table>
+        <small>{{ plottable ? chartOptions.length + ' 项趋势' : '暂无可绘制数据' }}</small>
+      </div>
+      <!-- 不同单位分成小图：血糖不会再被血压的 0–100 量纲压平。 -->
+      <div v-if="plottable" class="trend-charts">
+        <article v-for="chart in chartOptions" :key="chart.name" class="trend-chart">
+          <div class="chart-head">
+            <b>{{ chart.name }}</b>
+            <span>{{ chart.unit }}</span>
+          </div>
+          <v-chart :option="chart.option" autoresize class="chart-canvas" />
+        </article>
+      </div>
+      <div v-else class="quiet">还没有可绘图的指标。点「新增指标」，或用「CSV 导入」一次性迁移历史记录。</div>
+    </section>
+
+    <section v-if="metrics.length" class="records-block" aria-labelledby="metric-records-title">
+      <div class="subsection-head">
+        <div>
+          <h4 id="metric-records-title">测量明细</h4>
+          <span>按记录时间查看数值与参考位置</span>
+        </div>
+        <small class="num">共 {{ metrics.length }} 条</small>
+      </div>
+      <el-table :data="metrics" empty-text="还没有指标">
+        <el-table-column label="指标" min-width="180">
+          <template #default="{ row }">
+            <span class="metric-label">
+              <b>{{ row.metricType }}</b>
+              <small v-if="row.unit">{{ row.unit }}</small>
+              <i v-if="row.note">{{ row.note }}</i>
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="数值与参考区间" min-width="230">
+          <template #default="{ row }">
+            <LabStrip variant="inline" :type="row.metricType" :value="row.value" :unit="row.unit" />
+          </template>
+        </el-table-column>
+        <el-table-column label="时间" min-width="190">
+          <template #default="{ row }">
+            <span class="metric-when">
+              <time>{{ formatWhen(row.recordedAt) }}</time>
+              <button
+                class="btn btn-quiet btn-sm metric-delete"
+                type="button"
+                :aria-label="`删除${row.metricType}在${formatWhen(row.recordedAt)}的记录`"
+                @click="$emit('delete-metric', row.id)"
+              >
+                <span aria-hidden="true" v-html="ICONS.trash"></span>
+                <span>删除</span>
+              </button>
+            </span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </section>
 
     <el-dialog v-model="visible" title="新增指标" width="440px">
       <div class="quick-types">
@@ -459,20 +491,92 @@ defineExpose({ openDialog })
 </script>
 
 <style scoped>
+.metric-workbench {
+  overflow: hidden;
+}
+
+.workbench-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--edge);
+  background: var(--card);
+}
+
+.workbench-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.workbench-title > span {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-chip);
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.workbench-title h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 680;
+}
+
+.workbench-title small {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.sec-btns,
+.data-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.trend-summary {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  border-bottom: 1px solid var(--edge);
+  background: var(--sunk);
+}
+
+.summary-label {
+  padding: var(--space-3) var(--space-4);
+  border-right: 1px solid var(--edge);
+  color: var(--ink-mute);
+  font-size: 11px;
+  font-weight: 650;
+}
+
 .trend-list {
   list-style: none;
-  margin: 0 0 var(--space-4);
-  padding: 0;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
   display: grid;
-  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
+  gap: 0 var(--space-5);
 }
 .trend-list li {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) 0;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--ink-soft);
 }
 .trend-copy {
@@ -480,6 +584,11 @@ defineExpose({ openDialog })
   align-items: flex-start;
   gap: var(--space-2);
   min-width: 0;
+}
+.trend-copy .note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .trend-list li.alert.flag-high .note {
   color: var(--flag-high);
@@ -506,16 +615,6 @@ defineExpose({ openDialog })
 .trend-list .dot.normal {
   background: var(--flag-normal);
 }
-.sec {
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.sec-btns {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
 .mt {
   margin-top: var(--space-4);
 }
@@ -523,7 +622,8 @@ defineExpose({ openDialog })
   color: var(--ink-faint);
   font-size: 13px;
   line-height: 1.7;
-  padding: var(--space-5) 0;
+  padding: var(--space-5);
+  background: var(--flag-none-wash);
 }
 .quick-types {
   display: flex;
@@ -566,13 +666,19 @@ defineExpose({ openDialog })
 .trend-charts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
-  gap: var(--space-5);
+  gap: 0;
 }
 
 .trend-chart {
   min-width: 0;
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--edge);
+  padding: var(--space-3) var(--space-5) var(--space-2);
+  border-right: 1px solid var(--edge);
+  border-bottom: 1px solid var(--edge);
+}
+
+.trend-chart:nth-child(even),
+.trend-chart:last-child {
+  border-right: 0;
 }
 
 .chart-head {
@@ -583,6 +689,7 @@ defineExpose({ openDialog })
 
 .chart-head b {
   font-size: 14px;
+  font-weight: 680;
 }
 
 .chart-head span {
@@ -591,7 +698,53 @@ defineExpose({ openDialog })
 }
 
 .chart-canvas {
-  height: 190px;
+  height: 210px;
+}
+
+.trend-block,
+.records-block {
+  min-width: 0;
+}
+
+.records-block {
+  border-top: 1px solid var(--edge);
+}
+
+.subsection-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  background: var(--flag-none-wash);
+}
+
+.subsection-head h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.subsection-head span,
+.subsection-head small {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.subsection-head span {
+  display: block;
+  margin-top: 2px;
+}
+
+.records-block :deep(.el-table) {
+  padding: 0 var(--space-5) var(--space-3);
+}
+
+.records-block :deep(.el-table th.el-table__cell) {
+  color: var(--ink-mute);
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .metric-label,
@@ -651,9 +804,96 @@ defineExpose({ openDialog })
 }
 
 @media (max-width: 720px) {
+  .workbench-head {
+    align-items: stretch;
+    flex-direction: column;
+    padding: var(--space-4);
+  }
+
+  .workbench-title {
+    align-items: flex-start;
+  }
+
+  .workbench-title > span {
+    display: none;
+  }
+
+  .sec-btns {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .sec-btns > .btn {
+    width: 100%;
+  }
+
+  .data-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .data-actions .btn {
+    min-width: 0;
+    padding-inline: var(--space-2);
+  }
+
+  .trend-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-label {
+    padding: var(--space-2) var(--space-4);
+    border-right: 0;
+    border-bottom: 1px solid var(--edge);
+  }
+
+  .trend-list {
+    grid-template-columns: 1fr;
+    padding-inline: var(--space-4);
+  }
+
   .trend-list li {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .trend-copy .note {
+    white-space: normal;
+  }
+
+  .subsection-head {
+    padding-inline: var(--space-4);
+  }
+
+  .trend-chart {
+    padding-inline: var(--space-4);
+    border-right: 0;
+  }
+
+  .chart-canvas {
+    height: 185px;
+  }
+
+  .records-block :deep(.el-table) {
+    padding-inline: var(--space-2);
+  }
+}
+
+@media (max-width: 420px) {
+  .workbench-title h3 {
+    font-size: 15px;
+  }
+
+  .data-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .data-actions .btn:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .subsection-head small {
+    display: none;
   }
 }
 </style>

@@ -1,6 +1,10 @@
 <template>
   <div class="page">
-    <PageHeader kicker="家庭健康" title="档案">
+    <PageHeader
+      kicker="家庭健康档案"
+      title="健康档案"
+      desc="按成员集中查看体征、报告、病史与跟进建议。"
+    >
       <template #extra>
         <button class="btn btn-primary" type="button" @click="createVisible = true">
           <span aria-hidden="true" v-html="ICONS.plus"></span>新建档案
@@ -16,8 +20,6 @@
         @select="select"
         @create="createVisible = true"
       />
-
-      <AlertCenter v-if="alerts.length" :alerts="alerts" :profiles="profiles" @locate="locateProfile" />
 
       <div v-if="!current" class="panel empty">
         <span aria-hidden="true" v-html="ICONS.file"></span>
@@ -39,26 +41,34 @@
         @delete="onDelete"
       />
 
+      <AlertCenter v-if="alerts.length" :alerts="alerts" :profiles="profiles" @locate="locateProfile" />
+
       <!-- 分段而不是一路堆叠：指标/报告/病史/建议四件事各自完整，
            叠在一页会让人滚到失去方位。 -->
-      <div class="tabs" role="tablist">
-        <button
-          v-for="t in TABS"
-          :key="t.key"
-          class="tab"
-          type="button"
-          role="tab"
-          :id="`health-tab-${t.key}`"
-          :aria-selected="tab === t.key"
-          :aria-controls="`health-panel-${t.key}`"
-          :tabindex="tab === t.key ? 0 : -1"
-          :class="{ on: tab === t.key }"
-          @click="setTab(t.key)"
-          @keydown="onTabKeydown($event, t.key)"
-        >
-          {{ t.label }}
-          <em class="num" :class="{ zero: t.count(counts) === 0 }">{{ t.count(counts) }}</em>
-        </button>
+      <div class="workspace-nav">
+        <div class="workspace-context">
+          <span>档案内容</span>
+          <strong>{{ current.displayName }}</strong>
+        </div>
+        <div class="tabs" role="tablist">
+          <button
+            v-for="t in TABS"
+            :key="t.key"
+            class="tab"
+            type="button"
+            role="tab"
+            :id="`health-tab-${t.key}`"
+            :aria-selected="tab === t.key"
+            :aria-controls="`health-panel-${t.key}`"
+            :tabindex="tab === t.key ? 0 : -1"
+            :class="{ on: tab === t.key }"
+            @click="setTab(t.key)"
+            @keydown="onTabKeydown($event, t.key)"
+          >
+            <span>{{ t.label }}</span>
+            <em class="num" :class="{ zero: t.count(counts) === 0 }">{{ t.count(counts) }}</em>
+          </button>
+        </div>
       </div>
 
       <!-- 指标 -->
@@ -70,14 +80,19 @@
         aria-labelledby="health-tab-metrics"
         tabindex="0"
       >
+        <div class="overview-head">
+          <div>
+            <span class="section-kicker">关键体征</span>
+            <h2>最新指标</h2>
+          </div>
+          <span class="coverage num">{{ filledCards.length }} / {{ metricCards.length }} 已记录</span>
+        </div>
 <!-- 只为有数据的指标发卡。没记录过的合并成一行添加入口 ——
              一张写着"还没有记录"的空卡片不承载任何信息，只占版面。 -->
         <div v-if="filledCards.length" class="cards">
-          <article v-for="c in filledCards" :key="c.type" class="tile card-pad">
+          <article v-for="c in filledCards" :key="c.type" class="tile card-pad metric-card" :class="'flag-' + c.flag">
             <LabStrip :type="c.type" :value="c.latest" :unit="c.unit" />
-            <p class="delta">
-              {{ c.delta == null ? '还没有第二次记录' : `较上次 ${c.delta > 0 ? '+' : ''}${c.delta}` }}
-            </p>
+            <p class="delta"><span>较上次</span><b class="num">{{ c.delta == null ? '首条记录' : `${c.delta > 0 ? '+' : ''}${c.delta}` }}</b></p>
           </article>
         </div>
 
@@ -112,7 +127,10 @@
         tabindex="0"
       >
         <template #head>
-          <h3>体检与化验报告</h3>
+          <div class="report-title">
+            <span class="section-kicker">档案附件</span>
+            <h3>体检与化验报告</h3>
+          </div>
           <router-link
             class="spacer btn btn-primary btn-sm"
             :to="{ path: '/reports/upload', query: { profileId: String(currentId) } }"
@@ -483,52 +501,91 @@ async function onAdvice() {
 <style scoped>
 .page-content {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
 
-/* ---- 分段 ---- */
-.tabs {
+/* ---- 档案工作区导航 ---- */
+.workspace-nav {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  min-width: 0;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-shell);
+  background: var(--card);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+
+.workspace-context {
   display: flex;
-  gap: var(--space-1);
-  padding: var(--space-1);
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+  border-right: 1px solid var(--edge);
   background: var(--sunk);
-  border-radius: var(--r-pill);
-  width: fit-content;
-  max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 
-.tabs::-webkit-scrollbar {
-  display: none;
+.workspace-context span {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.workspace-context strong {
+  margin-top: var(--space-1);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(112px, 1fr));
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
   border: 0;
+  border-right: 1px solid var(--edge);
   background: none;
   cursor: pointer;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--r-pill);
+  padding: var(--space-3) var(--space-4);
   color: var(--ink-mute);
-  font-size: 14px;
-  font-weight: 550;
+  font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
-  transition: background 0.18s var(--ease-out), color 0.15s ease, box-shadow 0.2s ease;
+  transition: background 0.16s var(--ease-soft), color 0.16s var(--ease-soft), box-shadow 0.16s var(--ease-soft);
+}
+
+.tab:last-child {
+  border-right: 0;
 }
 
 .tab.on {
-  background: var(--card);
-  color: var(--ink);
-  box-shadow: var(--shadow-1);
+  background: var(--accent-wash);
+  color: var(--accent);
+  box-shadow: inset 0 -3px 0 var(--accent);
 }
 
 .tab em {
+  min-width: 20px;
+  padding: 1px var(--space-1);
+  border: 1px solid var(--flag-none-line);
+  border-radius: var(--r-chip);
+  background: var(--flag-none-wash);
   font-style: normal;
-  font-size: 12px;
-  color: var(--ink-faint);
+  font-size: 11px;
+  color: var(--ink-mute);
+  text-align: center;
+}
+
+.tab.on em {
+  border-color: var(--accent-line);
+  background: var(--card);
+  color: var(--accent);
 }
 
 .tab em.zero {
@@ -538,16 +595,51 @@ async function onAdvice() {
 
 @media (hover: hover) and (pointer: fine) {
   .tab:not(.on):hover {
+    background: var(--tray);
     color: var(--ink);
   }
 }
 
-/* ---- 指标卡 ---- */
+/* ---- 指标概览 ---- */
+.tab-panel {
+  min-width: 0;
+}
+
+.overview-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-1) 0 0;
+}
+
+.section-kicker {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.overview-head h2,
+.report-title h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 680;
+}
+
+.coverage {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-chip);
+  color: var(--ink-mute);
+  font-size: 11px;
+}
+
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--space-3);
-  /* 按内容定高：没数据的卡片不该被有数据的撑成同样高 */
   align-items: start;
 }
 
@@ -555,27 +647,58 @@ async function onAdvice() {
   padding: var(--space-4) var(--space-5);
 }
 
-.delta {
-  margin-top: var(--space-3);
-  font-size: 12px;
-  color: var(--ink-faint);
+.metric-card {
+  --metric-tone: var(--flag-none);
+  border-top: 3px solid var(--metric-tone);
+  box-shadow: inset 0 1px 0 var(--metric-wash, var(--flag-none-wash));
 }
 
-/* 未记录指标的合并入口：一行，虚线，明确是"去添加"而不是"没数据" */
+.metric-card.flag-high {
+  --metric-tone: var(--flag-high);
+  --metric-wash: var(--flag-high-wash);
+}
+
+.metric-card.flag-low {
+  --metric-tone: var(--flag-low);
+  --metric-wash: var(--flag-low-wash);
+}
+
+.metric-card.flag-normal {
+  --metric-tone: var(--flag-normal);
+  --metric-wash: var(--flag-normal-wash);
+}
+
+.delta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--edge);
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+
+.delta b {
+  color: var(--metric-tone);
+  font-size: 12px;
+  font-weight: 650;
+}
+
 .add-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  padding: var(--space-4);
+  padding: var(--space-3) var(--space-4);
   border: 1.5px dashed var(--edge-strong);
   border-radius: var(--r-card);
   background: transparent;
   cursor: pointer;
   text-align: left;
   color: var(--ink);
-  transition: border-color 0.3s var(--ease-soft), background 0.4s var(--ease),
-    transform 0.4s var(--ease);
+  transition: border-color 0.16s var(--ease-soft), background 0.16s var(--ease-soft), transform 0.12s var(--ease-out);
 }
 
 .add-row:active {
@@ -594,9 +717,9 @@ async function onAdvice() {
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: var(--r-avatar);
-  background: var(--tray);
-  color: var(--ink-mute);
+  border-radius: var(--r-control);
+  background: var(--accent-wash);
+  color: var(--accent);
   flex-shrink: 0;
 }
 
@@ -609,7 +732,7 @@ async function onAdvice() {
 .add-txt b {
   display: block;
   font-size: 14px;
-  font-weight: 550;
+  font-weight: 620;
 }
 
 .add-txt i {
@@ -621,6 +744,10 @@ async function onAdvice() {
 }
 
 /* ---- 报告行 ---- */
+.report-title {
+  min-width: 0;
+}
+
 .rep {
   width: 100%;
   display: flex;
@@ -630,15 +757,17 @@ async function onAdvice() {
   background: none;
   border: 0;
   border-top: 1px solid var(--edge);
-  padding: var(--space-3) var(--space-1);
+  padding: var(--space-3) var(--space-2);
   cursor: pointer;
   color: var(--ink);
-  transition: color 0.15s var(--ease-soft);
+  transition: color 0.15s var(--ease-soft), background 0.15s var(--ease-soft), box-shadow 0.15s var(--ease-soft);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .rep:hover {
+    background: var(--accent-wash);
     color: var(--accent);
+    box-shadow: inset 3px 0 0 var(--accent);
   }
 }
 
@@ -660,7 +789,7 @@ async function onAdvice() {
 
 .rep-main b {
   display: block;
-  font-weight: 500;
+  font-weight: 620;
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -682,15 +811,79 @@ async function onAdvice() {
 }
 
 @media (max-width: 720px) {
+  .page-content {
+    gap: var(--space-3);
+  }
+
+  .workspace-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-context {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-right: 0;
+    border-bottom: 1px solid var(--edge);
+  }
+
+  .workspace-context strong {
+    margin-top: 0;
+  }
+
+  .tabs {
+    grid-template-columns: repeat(4, minmax(78px, 1fr));
+  }
+
+  .tab {
+    gap: var(--space-1);
+    padding: var(--space-3) var(--space-2);
+    font-size: 12px;
+  }
+
+  .tab em {
+    min-width: 18px;
+  }
+
+  .overview-head {
+    align-items: center;
+  }
+
+  .overview-head h2 {
+    font-size: 16px;
+  }
+
   .cards {
     grid-template-columns: 1fr;
   }
+
+  .card-pad {
+    padding: var(--space-4);
+  }
+
   .rep {
     flex-wrap: wrap;
     gap: var(--space-2);
   }
   .rep time {
     margin-left: var(--space-6);
+  }
+}
+
+@media (max-width: 420px) {
+  .tab {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .coverage {
+    white-space: nowrap;
+  }
+
+  .add-row {
+    align-items: flex-start;
   }
 }
 </style>
