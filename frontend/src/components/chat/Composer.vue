@@ -223,7 +223,7 @@ defineExpose({
 .tools {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -232,14 +232,14 @@ defineExpose({
 .tool {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
   padding: 6px 11px;
   border-radius: var(--r-pill);
   border: 1px solid var(--edge-strong);
   color: var(--ink-mute);
   font-size: 13px;
   cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease,
+  transition: color 0.15s var(--ease-soft), border-color 0.15s var(--ease-soft), background 0.15s var(--ease-soft),
     transform 0.12s var(--ease-out);
 }
 

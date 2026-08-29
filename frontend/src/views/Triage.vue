@@ -402,8 +402,8 @@ function urgencyHint(u: string) {
 
 .urgency-copy strong {
   color: var(--urgency-tone);
-  font-family: var(--font-display);
-  font-size: 20px;
+  font-family: var(--font);
+  font-size: 21px;
   font-weight: 650;
 }
 
@@ -512,7 +512,6 @@ function urgencyHint(u: string) {
 .dept-title {
   flex: 1;
   min-width: 0;
-  font-size: 18px;
 }
 
 .dept p {

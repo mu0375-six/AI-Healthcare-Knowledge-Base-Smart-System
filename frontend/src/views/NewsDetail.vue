@@ -42,7 +42,7 @@
 
       <template v-else>
         <div class="skeleton" style="height: 34px; width: 70%"></div>
-        <div class="skeleton" style="height: 18px; width: 40%; margin-top: 14px"></div>
+        <div class="skeleton" style="height: 18px; width: 40%; margin-top: var(--space-4)"></div>
         <div class="skeleton" style="height: 220px; margin-top: 22px; border-radius: var(--r-card)"></div>
       </template>
     </article>

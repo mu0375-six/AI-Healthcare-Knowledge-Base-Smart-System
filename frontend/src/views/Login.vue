@@ -191,7 +191,7 @@ async function onSubmit() {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 18px;
+  gap: var(--space-5);
 }
 
 .points li {

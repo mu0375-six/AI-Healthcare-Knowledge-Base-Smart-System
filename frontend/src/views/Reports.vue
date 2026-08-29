@@ -4,13 +4,7 @@
       kicker="报告解读"
       title="把化验单交给系统读一遍"
       desc="多模态模型直接读图，抽出指标、判高低、逐项解读，并写进对应家人的档案。识别效果不佳时，把文字贴到下面一样能解读。"
-    >
-      <template #back>
-        <router-link class="back" :to="backTo">
-          <span v-html="ICONS.chevron"></span>返回档案
-        </router-link>
-      </template>
-    </PageHeader>
+    />
 
     <!-- 投放区是这页的主行为：虚线边框 + 拖入/已选两个明确状态 -->
     <section
@@ -86,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { uploadReport } from '@/api/reports'
@@ -108,12 +102,6 @@ const dragging = ref(false)
 const uploadStage = ref(0)
 const UPLOAD_STAGES = ['识别报告内容', '提取指标与参考区间', '生成逐项解读'] as const
 let stageTimers: number[] = []
-
-// 每一页都要有回头路：带上来时的档案 id，返回时还落在同一份档案
-const backTo = computed(() => ({
-  path: '/health',
-  query: { tab: 'reports', ...(profileId.value ? { id: String(profileId.value) } : {}) },
-}))
 
 function ext(name: string) {
   return (name.split('.').pop() || '').toLowerCase()
@@ -196,29 +184,6 @@ onBeforeUnmount(clearStages)
   margin-bottom: 0;
 }
 
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--ink-mute);
-  transition: color 0.15s ease;
-}
-
-/* 左向箭头：复用 chevron 旋转，不为一个方向再画一个图标 */
-.back :deep(svg) {
-  width: 16px;
-  height: 16px;
-  transform: rotate(90deg);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .back:hover {
-    color: var(--accent);
-  }
-}
-
 /* ---- 投放区 ---- */
 .drop {
   display: grid;
@@ -260,14 +225,14 @@ onBeforeUnmount(clearStages)
 
 .drop-title {
   font-family: var(--font);
-  font-size: 19px;
+  font-size: 21px;
   word-break: break-all;
   max-width: 17em;
 }
 
 .formats,
 .picked {
-  margin-top: 6px;
+  margin-top: var(--space-2);
   font-size: 13px;
   color: var(--ink-mute);
 }
@@ -284,7 +249,7 @@ onBeforeUnmount(clearStages)
 .link {
   border: 0;
   background: none;
-  padding: 0 0 0 8px;
+  padding: 0 0 0 var(--space-2);
   color: var(--accent);
   font-size: inherit;
   cursor: pointer;
@@ -353,9 +318,6 @@ onBeforeUnmount(clearStages)
 @media (max-width: 720px) {
   .drop {
     padding: var(--space-5) var(--space-4);
-  }
-  .drop-title {
-    font-size: 17px;
   }
   .picks {
     width: 100%;

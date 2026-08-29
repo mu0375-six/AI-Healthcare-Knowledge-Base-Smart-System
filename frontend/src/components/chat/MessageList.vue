@@ -210,7 +210,7 @@ defineExpose({
 .who {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   font-size: 12px;
   font-weight: 550;
   color: var(--ink-faint);
@@ -226,7 +226,7 @@ defineExpose({
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 7px;
+  border-radius: var(--r-chip);
   background: var(--flag-none-wash);
   color: var(--ink-mute);
   font-size: 11px;
@@ -302,7 +302,7 @@ defineExpose({
 .fav {
   margin-top: var(--space-2);
   color: var(--ink-faint);
-  transition: color 0.15s ease, background 0.15s ease;
+  transition: color 0.15s var(--ease-soft), background 0.15s var(--ease-soft);
 }
 
 .bubble:hover .fav,

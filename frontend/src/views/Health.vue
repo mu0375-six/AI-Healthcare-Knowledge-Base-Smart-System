@@ -633,7 +633,7 @@ async function onAdvice() {
   padding: var(--space-3) var(--space-1);
   cursor: pointer;
   color: var(--ink);
-  transition: color 0.15s ease;
+  transition: color 0.15s var(--ease-soft);
 }
 
 @media (hover: hover) and (pointer: fine) {

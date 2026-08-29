@@ -338,8 +338,8 @@ async function fav(messageId: number) {
 .profile-bar {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 9px 14px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--r-card);
   background: var(--accent-wash);
   border: 1px solid var(--accent-line);
@@ -367,7 +367,7 @@ async function fav(messageId: number) {
   font-size: 13px;
   padding: 2px 6px;
   border-radius: var(--r-chip);
-  transition: color 0.15s ease;
+  transition: color 0.15s var(--ease-soft);
 }
 
 .profile-bar button:hover {

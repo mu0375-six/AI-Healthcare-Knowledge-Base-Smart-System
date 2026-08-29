@@ -321,13 +321,13 @@ function onCommand(cmd: string) {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin: 0 -4px;
-  padding: 0 4px;
+  gap: var(--space-1);
+  margin: 0 calc(var(--space-1) * -1);
+  padding: 0 var(--space-1);
 }
 
 .rail-label {
-  margin: 18px 10px 6px;
+  margin: var(--space-5) var(--space-3) var(--space-2);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0;
@@ -338,8 +338,8 @@ function onCommand(cmd: string) {
 .rail-item {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 9px 11px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--r-control);
   color: var(--ink-soft);
   font-size: 14px;
@@ -637,7 +637,7 @@ function onCommand(cmd: string) {
 
   .burger {
     display: grid;
-    gap: 5px;
+    gap: var(--space-1);
     padding: 8px 4px;
     border: 0;
     background: none;

@@ -1,11 +1,6 @@
 <template>
   <div v-if="report" class="page">
     <PageHeader kicker="报告解读" :title="report.filename || '检查报告'" :desc="reportMeta">
-      <template #back>
-        <router-link class="back" :to="{ path: '/health', query: { tab: 'reports' } }">
-          <span v-html="ICONS.chevron"></span>返回档案
-        </router-link>
-      </template>
       <template #extra>
         <div class="acts">
           <el-select v-model="profileId" placeholder="写入档案" style="width: 168px" size="default">
@@ -223,28 +218,6 @@ async function exportPdf() {
 
 .page :deep(.head h1) {
   overflow-wrap: anywhere;
-}
-
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: 13px;
-  font-weight: 550;
-  color: var(--ink-mute);
-  transition: color 0.15s ease;
-}
-
-.back :deep(svg) {
-  width: 16px;
-  height: 16px;
-  transform: rotate(90deg);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .back:hover {
-    color: var(--accent);
-  }
 }
 
 .acts {

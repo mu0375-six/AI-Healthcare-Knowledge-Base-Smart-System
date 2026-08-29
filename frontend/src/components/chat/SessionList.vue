@@ -253,10 +253,10 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
 
 .ops {
   display: flex;
-  gap: 2px;
+  gap: var(--space-1);
   flex-shrink: 0;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s var(--ease-soft);
 }
 
 .sess-row:hover .ops,
@@ -284,7 +284,7 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
   border-radius: var(--r-chip);
   color: var(--ink-faint);
   cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition: color 0.15s var(--ease-soft), background 0.15s var(--ease-soft);
 }
 
 .ops button :deep(svg),

@@ -616,7 +616,7 @@ a.tile:active,
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   padding: 3px 10px;
   border-radius: var(--r-chip);
   border: 1px solid var(--flag-none-line);
@@ -682,7 +682,7 @@ a.tile:active,
 .notice {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   padding: 13px 18px;
   border-radius: var(--r-card);
   border: 1px solid var(--flag-none-line);
@@ -1099,7 +1099,7 @@ html.dark ::-webkit-scrollbar-thumb {
   }
 
   .bento {
-    gap: 10px;
+    gap: var(--space-3);
   }
 
   .el-select,

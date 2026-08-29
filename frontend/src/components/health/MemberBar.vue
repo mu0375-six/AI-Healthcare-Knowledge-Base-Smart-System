@@ -72,7 +72,7 @@ function memberMeta(profile: HealthProfile) {
   border-radius: var(--r-pill);
   background: transparent;
   color: var(--ink-soft);
-  transition: background 0.18s ease, box-shadow 0.18s ease, color 0.18s ease,
+  transition: background 0.18s var(--ease-soft), box-shadow 0.18s var(--ease-soft), color 0.18s var(--ease-soft),
     transform 0.1s ease-out;
 }
 .member:hover {

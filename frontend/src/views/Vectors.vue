@@ -83,7 +83,7 @@ import { ElMessage } from 'element-plus'
 import VChart from 'vue-echarts'
 import { inspectVectors, reindexVectors, vectorStatus, type VectorInspect, type VectorStoreInfo } from '@/api/knowledge'
 import { useUserStore } from '@/stores/user'
-import { CHART_COLORS, chartTheme } from '@/utils/charts'
+import { chartTheme } from '@/utils/charts'
 import { SUGGESTIONS } from '@/utils/suggestions'
 import { ICONS } from '@/utils/icons'
 import PageHeader from '@/components/PageHeader.vue'
@@ -156,7 +156,7 @@ const barOption = computed(() => {
       {
         type: 'bar',
         data: hits.map((h) => h.score).reverse(),
-        itemStyle: { color: CHART_COLORS[0] },
+        itemStyle: { color: t.colors[0] },
       },
     ],
   }
@@ -180,7 +180,7 @@ const pieOption = computed(() => {
         type: 'pie',
         radius: ['42%', '68%'],
         data: Array.from(map.entries()).map(([name, value]) => ({ name, value })),
-        color: CHART_COLORS,
+        color: t.colors,
       },
     ],
   }
