@@ -350,8 +350,7 @@ time,
   padding: 20px;
 }
 
-/* 单层表面：Double-Bezel 只给需要强调的主构件。
-   表单、表格、密集列表套两层壳只会吃掉信息密度。 */
+/* 单层工作面：表单、表格和密集列表不再套装饰性双层外壳。 */
 .panel {
   background: var(--card);
   border: 1px solid var(--edge);
@@ -1045,6 +1044,31 @@ html.dark ::-webkit-scrollbar-thumb {
 @media (max-width: 720px) {
   body {
     font-size: 14px;
+  }
+
+  /* 手机端统一可点击面积，视觉尺寸仍由各组件自己的 padding 控制。 */
+  .btn,
+  .chip-btn,
+  .el-button,
+  .burger,
+  .top-action,
+  .icon-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  /* Element Plus 会把 width prop 写成行内样式，窄屏必须显式覆盖。 */
+  .el-dialog {
+    max-width: calc(100vw - 32px) !important;
+    margin: 16px auto !important;
+  }
+
+  .el-pagination .btn-prev,
+  .el-pagination .btn-next,
+  .el-pagination .el-pager li,
+  .alert-center .head {
+    min-width: 40px;
+    min-height: 40px;
   }
 
   .core-pad {

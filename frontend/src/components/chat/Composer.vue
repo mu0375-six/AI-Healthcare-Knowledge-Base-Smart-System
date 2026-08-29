@@ -11,6 +11,7 @@
 
         <el-input
           v-model="question"
+          :disabled="streaming"
           type="textarea"
           :rows="2"
           resize="none"
@@ -21,15 +22,15 @@
 
         <div class="bar">
           <div class="tools">
-            <label class="tool" title="从相册或电脑选图">
+            <label class="tool" :class="{ disabled: streaming }" title="从相册或电脑选图">
               <span v-html="ICONS.image"></span>
               <span class="tool-txt">图片</span>
-              <input type="file" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple hidden @change="onPick" />
+              <input type="file" :disabled="streaming" accept="image/png,image/jpeg,image/jpg,image/webp,image/gif" multiple hidden @change="onPick" />
             </label>
-            <label class="tool" title="调用摄像头拍照">
+            <label class="tool" :class="{ disabled: streaming }" title="调用摄像头拍照">
               <span v-html="ICONS.camera"></span>
               <span class="tool-txt">拍照</span>
-              <input type="file" accept="image/*" capture="environment" hidden @change="onPick" />
+              <input type="file" :disabled="streaming" accept="image/*" capture="environment" hidden @change="onPick" />
             </label>
             <span class="hint">
               <span class="hint-wide">图片单张不超过 4 MB</span>
@@ -70,7 +71,7 @@ import { onBeforeUnmount, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ICONS } from '@/utils/icons'
 
-defineProps<{ streaming: boolean }>()
+const props = defineProps<{ streaming: boolean }>()
 
 const dragging = ref(false)
 
@@ -82,7 +83,8 @@ const emit = defineEmits<{
 const question = ref('')
 const pending = ref<{ key: number; file: File; preview: string }[]>([])
 
-function addFiles(files: File[]) {
+function addFiles(files: File[], force = false) {
+  if (props.streaming && !force) return
   for (const file of files) {
     if (!file.type.startsWith('image/')) continue
     if (file.size > 4 * 1024 * 1024) {
@@ -104,6 +106,7 @@ function onPick(e: Event) {
 }
 
 function onPaste(e: ClipboardEvent) {
+  if (props.streaming) return
   const files = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith('image/'))
   if (files.length) {
     e.preventDefault()
@@ -113,6 +116,7 @@ function onPaste(e: ClipboardEvent) {
 
 function onDrop(e: DragEvent) {
   dragging.value = false
+  if (props.streaming) return
   addFiles(Array.from(e.dataTransfer?.files || []))
 }
 
@@ -134,6 +138,7 @@ function onKey(e: KeyboardEvent) {
 }
 
 function submit() {
+  if (props.streaming) return
   const text = question.value.trim()
   const files = pending.value.map((p) => p.file)
   if (!text && !files.length) return
@@ -149,6 +154,10 @@ defineExpose({
   prefill(q: string) {
     question.value = q
     submit()
+  },
+  restore(text: string, files: File[]) {
+    question.value = text
+    addFiles(files, true)
   },
 })
 </script>
@@ -339,7 +348,20 @@ defineExpose({
     font-size: 11.5px;
   }
   .tool {
+    min-height: 40px;
     padding: 5px 7px;
   }
+
+  .thumb button {
+    top: 2px;
+    right: 2px;
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.tool.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 </style>

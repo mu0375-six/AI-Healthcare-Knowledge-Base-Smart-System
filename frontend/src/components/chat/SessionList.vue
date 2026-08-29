@@ -30,7 +30,18 @@
       <small>{{ sessions.length }}</small>
     </div>
     <div class="sess-list">
-      <div v-if="!sessions.length" class="quiet">
+      <div v-if="loading" class="quiet" aria-live="polite">
+        <span v-html="ICONS.clock"></span>
+        <b>正在读取问诊记录</b>
+        <small>稍等片刻，会话会出现在这里</small>
+      </div>
+      <div v-else-if="error" class="quiet retry" role="alert">
+        <span v-html="ICONS.alert"></span>
+        <b>{{ error }}</b>
+        <small>当前列表不是空数据，可以重新读取。</small>
+        <button class="btn btn-ghost btn-sm" type="button" @click="$emit('retry')">重新读取</button>
+      </div>
+      <div v-else-if="!sessions.length" class="quiet">
         <span v-html="ICONS.chat"></span>
         <b>还没有问诊记录</b>
         <small>开始一次新问诊后，会话将保存在这里</small>
@@ -99,6 +110,8 @@ const props = defineProps<{
   sessions: ChatSession[]
   activeId: number | null
   hasMore: boolean
+  loading?: boolean
+  error?: string
   drawerOpen?: boolean
 }>()
 
@@ -108,6 +121,7 @@ const emit = defineEmits<{
   remove: [id: number]
   rename: [id: number, title: string]
   more: []
+  retry: []
   close: []
 }>()
 
@@ -270,6 +284,16 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
   line-height: 1.6;
 }
 
+.quiet.retry > span {
+  color: var(--flag-high);
+  background: var(--flag-high-wash);
+  border-color: var(--flag-high-line);
+}
+
+.quiet.retry .btn {
+  margin-top: var(--space-3);
+}
+
 .sess-row {
   position: relative;
   width: 100%;
@@ -417,9 +441,10 @@ const vFocus = { mounted: (el: HTMLInputElement) => el.focus() }
 }
 
 @media (max-width: 900px) {
+  .ops button,
   .drawer-close {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     border-radius: var(--r-pill);
   }
 }

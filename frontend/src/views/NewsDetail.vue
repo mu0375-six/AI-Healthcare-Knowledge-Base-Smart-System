@@ -1,9 +1,5 @@
 <template>
   <div class="page">
-    <button class="back-link" type="button" @click="goBack">
-      <span v-html="ICONS.arrow"></span>返回健康简报
-    </button>
-
     <article v-if="detail" class="briefing" aria-labelledby="news-title">
       <header class="briefing-head">
         <div class="issue-line">
@@ -101,13 +97,6 @@ onMounted(async () => {
   }
 })
 
-function goBack() {
-  if (window.history.length > 1) {
-    router.back()
-  } else {
-    router.push('/home')
-  }
-}
 </script>
 
 <style scoped>
@@ -117,30 +106,6 @@ function goBack() {
   margin: 0 auto;
   display: grid;
   gap: var(--space-4);
-}
-
-.back-link {
-  width: max-content;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) 0;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  background: transparent;
-  color: var(--ink-mute);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-
-.back-link > span {
-  display: grid;
-  transform: rotate(180deg);
-}
-
-.back-link :deep(svg) {
-  width: 15px;
-  height: 15px;
 }
 
 .briefing {
@@ -382,11 +347,6 @@ h1 {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .back-link:hover {
-    border-bottom-color: var(--accent-line);
-    color: var(--accent);
-  }
-
   .source-link:hover {
     border-color: var(--accent);
     background: var(--card);

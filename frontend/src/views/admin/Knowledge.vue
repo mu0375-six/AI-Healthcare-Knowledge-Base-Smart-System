@@ -4,19 +4,28 @@
 
     <section class="knowledge-status">
       <div class="sync-copy">
-        <span class="status-dot"></span>
+        <span class="status-dot" :class="{ pending: loading, error: loadError }"></span>
         <div>
           <small>知识源状态</small>
-          <strong>权威源可同步</strong>
-          <p>WHO 与国家卫健委公开文本</p>
+          <strong>{{ loading ? '正在读取知识库' : loadError ? '知识库暂不可用' : '权威源可同步' }}</strong>
+          <p>{{ loadError || 'WHO 与国家卫健委公开文本' }}</p>
         </div>
       </div>
-      <div class="status-metric"><span>已入库文档</span><strong class="num">{{ total }}</strong></div>
-      <div class="status-metric"><span>当前页</span><strong class="num">{{ page }}</strong></div>
-      <button class="btn btn-primary" type="button" :disabled="syncing" @click="doSync">
+      <div class="status-metric"><span>已入库文档</span><strong class="num">{{ loading || loadError ? '—' : total }}</strong></div>
+      <div class="status-metric"><span>当前页</span><strong class="num">{{ loading || loadError ? '—' : page }}</strong></div>
+      <button class="btn btn-primary" type="button" :disabled="syncing || loading || !!loadError" @click="doSync">
         {{ syncing ? '同步中…' : '从权威源同步' }}
       </button>
     </section>
+
+    <div v-if="loadError" class="notice high load-error" role="alert">
+      <span aria-hidden="true" v-html="ICONS.alert"></span>
+      <div>
+        <strong>文档列表读取失败</strong>
+        <p>{{ docs.length ? '当前显示的是上次成功读取的数据，不代表最新状态。' : '当前没有可确认的数据，请重新连接后再操作。' }}</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" type="button" @click="load()">重新读取</button>
+    </div>
 
     <div class="intake-grid">
       <section class="panel core-pad intake">
@@ -58,8 +67,8 @@
     </div>
 
     <section class="panel core-pad block">
-      <div class="section-head"><h3>已入库文档</h3><span class="count num">{{ total }}</span></div>
-      <el-table :data="docs" empty-text="暂无文档">
+      <div class="section-head"><h3>已入库文档</h3><span class="count num">{{ loadError ? '—' : total }}</span></div>
+      <el-table :data="docs" :empty-text="loading ? '正在读取文档…' : loadError ? '读取失败' : '暂无文档'">
         <el-table-column prop="title" label="标题" min-width="160" />
         <el-table-column prop="publisher" label="发布机构" width="220" />
         <el-table-column prop="category" label="分类" width="110" />
@@ -89,7 +98,7 @@
         </el-table-column>
       </el-table>
       <el-pagination
-        v-if="total > pageSize"
+        v-if="!loadError && total > pageSize"
         class="pager"
         layout="prev, pager, next, total"
         :total="total"
@@ -119,20 +128,30 @@ const file = ref<File | null>(null)
 const uploading = ref(false)
 const saving = ref(false)
 const syncing = ref(false)
+const loading = ref(true)
+const loadError = ref('')
 const upload = reactive({ title: '', category: '疾病指南', source: '' })
 const text = reactive({ title: '', category: '疾病指南', source: '后台录入', content: '' })
 
-onMounted(load)
+onMounted(() => void load())
 
 async function load(p = page.value) {
-  const res = await listKnowledge(p, pageSize)
-  docs.value = res.data?.records || []
-  total.value = res.data?.total || 0
-  page.value = p
+  loading.value = true
+  loadError.value = ''
+  try {
+    const res = await listKnowledge(p, pageSize)
+    docs.value = res.data?.records || []
+    total.value = res.data?.total || 0
+    page.value = p
+  } catch {
+    loadError.value = '服务没有返回文档数据。'
+  } finally {
+    loading.value = false
+  }
 }
 
 function turn(p: number) {
-  load(p)
+  void load(p)
 }
 
 function onFile(f: UploadFile) {
@@ -215,6 +234,14 @@ function sourceDomain(url: string) {
   background: var(--flag-normal);
   box-shadow: 0 0 0 4px var(--flag-normal-wash);
 }
+.status-dot.pending {
+  background: var(--info);
+  box-shadow: 0 0 0 4px var(--info-wash);
+}
+.status-dot.error {
+  background: var(--flag-high);
+  box-shadow: 0 0 0 4px var(--flag-high-wash);
+}
 .sync-copy > div {
   display: grid;
   gap: 1px;
@@ -249,6 +276,22 @@ function sourceDomain(url: string) {
 }
 .knowledge-status > .btn {
   margin: 0 16px;
+}
+.load-error {
+  margin-top: var(--space-3);
+}
+.load-error > div {
+  flex: 1;
+  min-width: 0;
+}
+.load-error strong {
+  display: block;
+  font-size: 13px;
+}
+.load-error p {
+  margin-top: 2px;
+  color: var(--ink-mute);
+  font-size: 12px;
 }
 .intake-grid {
   display: grid;

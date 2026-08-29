@@ -311,6 +311,12 @@ async function onSubmit() {
   cursor: pointer;
 }
 
+@media (max-width: 720px) {
+  .auth-tabs button {
+    min-height: 40px;
+  }
+}
+
 .auth-tabs button.active {
   background: var(--card);
   color: var(--ink);

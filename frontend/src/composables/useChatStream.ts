@@ -17,6 +17,8 @@ export function useChatStream(
   const announcement = ref('')
   /** 当前流式请求的中止器：停止按钮与离开页面都靠它断开 SSE。 */
   let activeStream: AbortController | null = null
+  let disposed = false
+  let stopRequested = false
   const ownedPreviewUrls = new Set<string>()
 
   function createPreview(file: File) {
@@ -50,10 +52,12 @@ export function useChatStream(
   })
 
   function stop() {
+    stopRequested = true
     activeStream?.abort()
   }
 
   onBeforeUnmount(() => {
+    disposed = true
     // 离开页面不再让流在后台空跑：断开后 sse.ts 抛 StreamAborted，这里已无人接，无害
     activeStream?.abort()
     releaseAllPreviews()
@@ -61,9 +65,30 @@ export function useChatStream(
 
   async function send(question: string, files: File[], profileId: number | null) {
     const hasFiles = files.length > 0
-    if ((!question && !hasFiles) || streaming.value) return
+    if ((!question && !hasFiles) || streaming.value) return false
     const display = question || '请看我发的图片，结合健康知识帮我解读。'
-    const sid = await ensureSession(hasFiles ? '图片问诊' : display.slice(0, 24))
+    stopRequested = false
+    streaming.value = true
+    announcement.value = '正在准备问诊'
+    let sid: number
+    try {
+      sid = await ensureSession(hasFiles ? '图片问诊' : display.slice(0, 24))
+    } catch {
+      streaming.value = false
+      if (disposed) return false
+      announcement.value = '问诊会话创建失败，输入内容已保留'
+      ElMessage.error('暂时无法创建问诊会话，输入内容已保留')
+      return false
+    }
+    if (disposed) {
+      streaming.value = false
+      return false
+    }
+    if (stopRequested) {
+      streaming.value = false
+      announcement.value = '已停止回答，输入内容已保留'
+      return false
+    }
 
     const userMessage: ChatMessage = {
       id: -Date.now(),
@@ -84,7 +109,6 @@ export function useChatStream(
       createdAt: '',
     }
     messages.value.push(bot)
-    streaming.value = true
     announcement.value = '正在回答'
     let answerCompleted = false
     try {
@@ -92,10 +116,25 @@ export function useChatStream(
       for (const file of files) {
         const up = await uploadChatImage(file)
         attachments.push(up.data)
+        if (disposed) {
+          releaseMessagePreviews(userMessage)
+          return true
+        }
+        if (stopRequested) {
+          bot.content = '已停止生成。'
+          announcement.value = '已停止回答'
+          return true
+        }
       }
       if (attachments.length) {
         userMessage.attachmentsJson = JSON.stringify(attachments)
         releaseMessagePreviews(userMessage)
+      }
+      if (disposed) return true
+      if (stopRequested) {
+        bot.content = '已停止生成。'
+        announcement.value = '已停止回答'
+        return true
       }
       activeStream = new AbortController()
       await askStream(
@@ -134,6 +173,7 @@ export function useChatStream(
       activeStream = null
       streaming.value = false
     }
+    return true
   }
 
   return { streaming, announcement, send, stop }

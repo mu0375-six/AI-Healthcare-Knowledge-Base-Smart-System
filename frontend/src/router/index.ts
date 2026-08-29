@@ -14,7 +14,7 @@ const router = createRouter({
         {
           path: 'home',
           component: () => import('@/views/Home.vue'),
-          meta: { title: '今天', topAction: { label: '上传报告', to: '/reports/upload', icon: 'upload' } },
+          meta: { title: '今天' },
         },
         {
           path: 'news/:id',
@@ -96,6 +96,11 @@ const router = createRouter({
             topAction: { label: '向量检索', to: '/vectors', icon: 'dots' },
           },
         },
+        {
+          path: ':pathMatch(.*)*',
+          component: () => import('@/views/NotFound.vue'),
+          meta: { title: '页面不存在' },
+        },
       ],
     },
   ],
@@ -111,9 +116,8 @@ router.beforeEach(async (to) => {
   }
   if (to.meta.admin) {
     const store = useUserStore()
-    // 刚刷新页面时内存里还没有 user（只有 localStorage 里的旧值，可能被手改），
-    // 先向服务端要一次真实身份再判 admin。后端对 /api/admin/** 另有角色校验兜底。
-    if (token && !store.user) {
+    // 管理路由每次都向服务端确认身份，避免信任过期或被改写的本地角色缓存。
+    if (token) {
       try {
         await store.fetchMe()
       } catch {

@@ -4,13 +4,7 @@
       kicker="家庭健康档案"
       title="健康档案"
       desc="按成员集中查看体征、报告、病史与跟进建议。"
-    >
-      <template #extra>
-        <button class="btn btn-primary" type="button" @click="createVisible = true">
-          <span aria-hidden="true" v-html="ICONS.plus"></span>新建档案
-        </button>
-      </template>
-    </PageHeader>
+    />
 
     <div class="page-content">
 
@@ -143,6 +137,13 @@
           <div v-for="n in 3" :key="n" class="skeleton" style="height: 58px; border-radius: var(--r-card)"></div>
         </div>
 
+        <div v-else-if="reportsError" class="empty" role="alert">
+          <span aria-hidden="true" v-html="ICONS.alert"></span>
+          <h3>报告列表暂时打不开</h3>
+          <p>{{ reportsError }}</p>
+          <button class="btn btn-ghost" type="button" @click="loadReports()">重新读取</button>
+        </div>
+
         <div v-else-if="!reports.length" class="empty">
           <span aria-hidden="true" v-html="ICONS.report"></span>
           <h3>还没有报告</h3>
@@ -266,6 +267,7 @@ const alerts = ref<MetricAlertItem[]>([])
 const histories = ref<HealthHistory[]>([])
 const reports = ref<ExamReport[]>([])
 const reportsLoading = ref(false)
+const reportsError = ref('')
 const advice = ref('')
 const adviceBasis = ref('')
 const adviceLoading = ref(false)
@@ -321,6 +323,18 @@ watch(
   },
 )
 
+watch(
+  () => route.query.new,
+  (value) => {
+    if (value !== '1') return
+    createVisible.value = true
+    const query = { ...route.query }
+    delete query.new
+    void router.replace({ query })
+  },
+  { immediate: true },
+)
+
 const filledCards = computed(() => metricCards.value.filter((c) => c.latest != null))
 const emptyTypes = computed(() => metricCards.value.filter((c) => c.latest == null).map((c) => c.type))
 const trendSection = ref<InstanceType<typeof MetricTrendSection>>()
@@ -352,10 +366,8 @@ onMounted(async () => {
   const prefer = Number(route.query.id) || undefined
   await loadReference()
   await loadProfiles(prefer)
-  if (route.query.new === '1') createVisible.value = true
   await loadTerms()
   alerts.value = (await listAlerts()).data || []
-  loadReports()
 })
 
 /** 报告列表按当前档案过滤：后端返回全部，这里只留归属这份档案的。 */
@@ -365,15 +377,21 @@ function brief(text: string) {
   return line.length > 42 ? line.slice(0, 42) + '…' : line
 }
 
-async function loadReports() {
+let reportsRequest = 0
+let selectionVersion = 0
+async function loadReports(profileId = currentId.value, selection = selectionVersion) {
+  const request = ++reportsRequest
   reportsLoading.value = true
+  reportsError.value = ''
   try {
     const all = (await listReports()).data || []
-    reports.value = all.filter((r) => !r.profileId || r.profileId === currentId.value)
+    if (request !== reportsRequest || selection !== selectionVersion || profileId !== currentId.value) return
+    reports.value = all.filter((r) => !r.profileId || r.profileId === profileId)
   } catch {
-    reports.value = []
+    if (request !== reportsRequest || selection !== selectionVersion || profileId !== currentId.value) return
+    reportsError.value = '服务没有返回报告数据，现有报告不会被当作空列表。'
   } finally {
-    reportsLoading.value = false
+    if (request === reportsRequest) reportsLoading.value = false
   }
 }
 
@@ -384,16 +402,27 @@ async function loadProfiles(preferId?: number) {
 }
 
 async function select(id: number) {
+  const selection = ++selectionVersion
   currentId.value = id
   editing.value = false
   const p = profiles.value.find((x) => x.id === id)
   if (p) assignForm(p)
-  metrics.value = (await listMetrics(id)).data || []
-  trends.value = (await listTrends(id)).data || []
-  histories.value = (await listHistories(id)).data || []
+  metrics.value = []
+  trends.value = []
+  histories.value = []
+  reports.value = []
   advice.value = p?.lastAdvice || ''
   adviceBasis.value = p?.adviceAt ? '上次生成于 ' + formatWhen(p.adviceAt) : ''
-  loadReports()
+  void loadReports(id, selection)
+  const [nextMetrics, nextTrends, nextHistories] = await Promise.all([
+    listMetrics(id),
+    listTrends(id),
+    listHistories(id),
+  ])
+  if (selection !== selectionVersion || id !== currentId.value) return
+  metrics.value = nextMetrics.data || []
+  trends.value = nextTrends.data || []
+  histories.value = nextHistories.data || []
 }
 
 function assignForm(p: HealthProfile) {

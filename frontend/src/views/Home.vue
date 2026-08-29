@@ -23,9 +23,6 @@
         <button class="btn btn-primary" type="button" @click="goAsk">
           <span v-html="ICONS.send"></span>开始问诊
         </button>
-        <router-link class="btn btn-ghost" to="/reports/upload">
-          <span v-html="ICONS.camera"></span>上传报告
-        </router-link>
       </div>
     </header>
 
@@ -1307,7 +1304,7 @@ function sparkOption(sr: MetricSeries) {
 
   .workspace-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .workspace-actions .btn {

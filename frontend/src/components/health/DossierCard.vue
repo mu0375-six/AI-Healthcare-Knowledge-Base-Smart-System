@@ -94,6 +94,7 @@ const bmi = computed(() => bmiOf(props.profile.heightCm, props.profile.weightKg)
   margin: var(--space-1) 0 var(--space-3);
   font-size: 25px;
   line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 .dossier p {
   margin: 0;
@@ -132,11 +133,14 @@ const bmi = computed(() => bmiOf(props.profile.heightCm, props.profile.weightKg)
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
   margin-top: var(--space-3) !important;
   color: var(--flag-high) !important;
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 .allergy span {
+  flex-shrink: 0;
   padding: 2px var(--space-2);
   border: 1px solid var(--flag-high-line);
   border-radius: var(--r-chip);

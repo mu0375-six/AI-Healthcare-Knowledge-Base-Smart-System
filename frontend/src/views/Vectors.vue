@@ -10,19 +10,32 @@
 
     <section class="system-strip" aria-label="向量服务状态">
       <div class="system-state">
-        <i :class="{ ok: milvusServing }"></i>
-        <span><small>当前运行模式</small><strong>{{ milvusServing ? 'Milvus 在线检索' : '内存降级检索' }}</strong></span>
+        <i :class="{ ok: !statusLoading && !statusError && milvusServing, pending: statusLoading }"></i>
+        <span>
+          <small>当前运行模式</small>
+          <strong>{{ statusLoading ? '正在检查服务' : statusError ? '状态暂不可用' : milvusServing ? 'Milvus 在线检索' : '内存降级检索' }}</strong>
+        </span>
       </div>
-      <div class="stat"><span>连接</span><em :class="milvusServing ? 'ok' : ''">{{ milvusServing ? '正常' : '未接入' }}</em></div>
-      <div class="stat"><span>向量条数</span><em class="num">{{ store.count }}</em></div>
-      <div class="stat"><span>向量维度</span><em class="num">{{ store.dim || 256 }}</em></div>
+      <div class="stat"><span>连接</span><em :class="!statusLoading && !statusError && milvusServing ? 'ok' : ''">{{ statusLoading ? '检查中' : statusError ? '未知' : milvusServing ? '正常' : '未接入' }}</em></div>
+      <div class="stat"><span>向量条数</span><em class="num">{{ statusLoading || statusError ? '—' : store.count }}</em></div>
+      <div class="stat"><span>向量维度</span><em class="num">{{ statusLoading || statusError ? '—' : store.dim || 256 }}</em></div>
     </section>
-    <div v-if="statusCopy.summary" class="status-detail">
+    <div v-if="statusError" class="notice high service-error" role="alert">
+      <span aria-hidden="true" v-html="ICONS.alert"></span>
+      <div><strong>没有读到向量服务状态</strong><p>{{ statusError }}</p></div>
+      <button class="btn btn-ghost btn-sm" type="button" @click="loadStatus">重新检查</button>
+    </div>
+    <div v-if="!statusError && statusCopy.summary" class="status-detail">
       <p>{{ statusCopy.summary }}{{ store.collection ? ' · 集合 ' + store.collection : '' }}</p>
       <details v-if="statusCopy.technical">
         <summary>查看技术详情</summary>
         <pre>{{ statusCopy.technical }}</pre>
       </details>
+    </div>
+    <div v-if="reindexError" class="notice high service-error" role="alert">
+      <span aria-hidden="true" v-html="ICONS.alert"></span>
+      <div><strong>索引重建未完成</strong><p>{{ reindexError }}</p></div>
+      <button class="btn btn-ghost btn-sm" type="button" @click="reindex">重新重建</button>
     </div>
 
     <section class="search-console panel core-pad">
@@ -36,13 +49,26 @@
       <p v-if="inspect" class="meta">耗时 {{ inspect.elapsedMs }} ms · ANN 召回 {{ inspect.rawHits.length }} · 词项过滤后 {{ inspect.keptHits.length }}</p>
     </section>
 
-    <section v-if="!inspect" class="panel empty vector-empty">
+    <section v-if="searchError" class="panel empty vector-empty" role="alert">
+      <span v-html="ICONS.alert"></span>
+      <h3>这次检索没有完成</h3>
+      <p>{{ searchError }}</p>
+      <button class="btn btn-ghost" type="button" @click="run">重新检索</button>
+    </section>
+
+    <section v-else-if="!inspect" class="panel empty vector-empty">
       <span v-html="ICONS.dots"></span>
       <h3>试一次知识召回</h3>
       <p>输入症状或药名，看看知识库会召回什么。</p>
     </section>
 
-    <div v-if="inspect" class="grid">
+    <section v-else-if="!inspect.rawHits.length" class="panel empty vector-empty" aria-live="polite">
+      <span v-html="ICONS.dots"></span>
+      <h3>没有召回相关切片</h3>
+      <p>换一个更具体的症状、药名或检查指标再试一次。</p>
+    </section>
+
+    <div v-if="inspect?.rawHits.length" class="grid">
       <Shell>
         <template #head><h3>相似度 Top-K</h3></template>
         <v-chart v-if="barOption" :option="barOption" autoresize style="height: 280px" />
@@ -53,7 +79,7 @@
       </Shell>
     </div>
 
-    <section v-if="inspect" class="panel core-pad block">
+    <section v-if="inspect?.rawHits.length" class="panel core-pad block">
       <div class="section-head"><h3>召回切片</h3></div>
       <p class="hint">ANN 是向量近邻；词项命中表示标题/正文里出现了问题里的医学词。问答最终只用词项命中的条目。</p>
       <article v-for="h in inspect.rawHits" :key="h.chunkId" class="hit" :class="{ keep: h.lexicalHit }">
@@ -91,6 +117,10 @@ const q = ref('二甲双胍注意事项')
 const loading = ref(false)
 const reindexing = ref(false)
 const inspect = ref<VectorInspect | null>(null)
+const statusLoading = ref(true)
+const statusError = ref('')
+const reindexError = ref('')
+const searchError = ref('')
 const suggests = SUGGESTIONS.vectors
 const statusCopy = computed(() => {
   const detail = store.value.detail?.trim() || ''
@@ -101,16 +131,31 @@ const statusCopy = computed(() => {
   return { summary, technical: detail.slice(index + marker.length).trim() }
 })
 
-onMounted(async () => {
-  store.value = (await vectorStatus()).data
-})
+onMounted(() => void loadStatus())
+
+async function loadStatus() {
+  statusLoading.value = true
+  statusError.value = ''
+  try {
+    store.value = (await vectorStatus()).data
+  } catch {
+    statusError.value = '服务状态请求失败，当前条数与连接方式未确认。'
+  } finally {
+    statusLoading.value = false
+  }
+}
 
 async function run() {
   if (!q.value.trim()) return
   loading.value = true
+  searchError.value = ''
+  inspect.value = null
   try {
     inspect.value = (await inspectVectors(q.value.trim())).data
     store.value = inspect.value.store
+    statusError.value = ''
+  } catch {
+    searchError.value = '知识库暂时没有返回结果，请稍后重试。'
   } finally {
     loading.value = false
   }
@@ -118,11 +163,15 @@ async function run() {
 
 async function reindex() {
   reindexing.value = true
+  reindexError.value = ''
   try {
     const d = (await reindexVectors()).data
     store.value = d.store
+    statusError.value = ''
     ElMessage.success('已重建 ' + d.count + ' 条向量')
     if (q.value.trim()) await run()
+  } catch {
+    reindexError.value = '请确认向量服务可用后再重试。'
   } finally {
     reindexing.value = false
   }
@@ -236,6 +285,10 @@ function onThemeChange() {
   background: var(--flag-normal);
   box-shadow: 0 0 0 4px var(--flag-normal-wash);
 }
+.system-state > i.pending {
+  background: var(--info);
+  box-shadow: 0 0 0 4px var(--info-wash);
+}
 .system-state > span {
   display: grid;
   gap: 2px;
@@ -273,6 +326,22 @@ function onThemeChange() {
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.service-error {
+  margin-bottom: var(--space-4);
+}
+.service-error > div {
+  flex: 1;
+  min-width: 0;
+}
+.service-error strong {
+  display: block;
+  font-size: 13px;
+}
+.service-error p {
+  margin-top: 2px;
+  color: var(--ink-mute);
+  font-size: 12px;
 }
 .ask {
   display: flex;

@@ -5,6 +5,8 @@
       :sessions="sessions"
       :active-id="sessionId"
       :has-more="hasMoreSessions"
+      :loading="sessionsLoading"
+      :error="sessionsError"
       :drawer-open="sessionsOpen && narrowScreen"
       :class="{ open: sessionsOpen }"
       @new="newSession"
@@ -12,6 +14,7 @@
       @remove="removeSession"
       @rename="renameSessionById"
       @more="loadMoreSessions"
+      @retry="reloadSessions"
       @close="closeSessions(true)"
     />
     <button
@@ -49,7 +52,7 @@
             <span class="trigger-caret" v-html="ICONS.chevron"></span>
           </button>
         </div>
-        <span class="service-state"><i aria-hidden="true"></i>问诊助手在线</span>
+        <span class="service-state"><i aria-hidden="true"></i>知识库辅助</span>
       </header>
       <div v-if="profileHint" class="profile-bar">
         <span v-html="ICONS.file"></span>
@@ -102,6 +105,9 @@ const composer = ref<InstanceType<typeof Composer>>()
 const messageList = ref<InstanceType<typeof MessageList>>()
 const sessionTrigger = ref<HTMLButtonElement>()
 const sessionsOpen = ref(false)
+const sessionsLoading = ref(true)
+const sessionsError = ref('')
+const sessionSwitching = ref(false)
 const drawerMedia = window.matchMedia('(max-width: 900px)')
 const narrowScreen = ref(drawerMedia.matches)
 const activeSessionTitle = computed(
@@ -111,6 +117,7 @@ const activeSessionTitle = computed(
 // 会话分页：侧栏只装最近一页，攒多了按「加载更多」往后翻
 let sessionPage = 1
 const hasMoreSessions = ref(false)
+let sessionsRequest = 0
 // 消息分页：第 1 页是最新一页，「加载更早」往前翻
 let messagePage = 1
 const hasEarlierMessages = ref(false)
@@ -121,7 +128,7 @@ const { streaming, announcement, send, stop } = useChatStream(messages, ensureSe
 onMounted(async () => {
   window.addEventListener('keydown', onWindowKeydown)
   drawerMedia.addEventListener('change', onDrawerMediaChange)
-  await Promise.all([reloadSessions(), loadTerms()])
+  await Promise.allSettled([reloadSessions(), loadTerms()])
   const pid = Number(route.query.profileId)
   if (pid) {
     profileId.value = pid
@@ -160,10 +167,21 @@ watch(
 )
 
 async function reloadSessions() {
-  const res = await listSessions(1)
-  sessions.value = res.data?.records || []
-  hasMoreSessions.value = sessions.value.length < (res.data?.total || 0)
-  sessionPage = 1
+  const request = ++sessionsRequest
+  sessionsLoading.value = true
+  sessionsError.value = ''
+  try {
+    const res = await listSessions(1)
+    if (request !== sessionsRequest) return
+    sessions.value = res.data?.records || []
+    hasMoreSessions.value = sessions.value.length < (res.data?.total || 0)
+    sessionPage = 1
+  } catch {
+    if (request !== sessionsRequest) return
+    sessionsError.value = '会话记录暂时无法读取'
+  } finally {
+    if (request === sessionsRequest) sessionsLoading.value = false
+  }
 }
 
 async function loadMoreSessions() {
@@ -185,22 +203,40 @@ async function ensureSession(firstTitle: string) {
 }
 
 async function newSession() {
+  if (!canChangeSession()) return
+  sessionSwitching.value = true
+  ++openSessionRequest
   if (sessionsOpen.value) await closeSessions(true)
-  const created = await createSession()
-  sessions.value.unshift(created.data)
-  sessionId.value = created.data.id
-  messages.value = []
-  hasEarlierMessages.value = false
+  try {
+    const created = await createSession()
+    sessions.value.unshift(created.data)
+    sessionId.value = created.data.id
+    messages.value = []
+    hasEarlierMessages.value = false
+  } finally {
+    sessionSwitching.value = false
+  }
 }
 
+let openSessionRequest = 0
 async function openSession(id: number) {
+  if (!canChangeSession()) return
+  sessionSwitching.value = true
   if (sessionsOpen.value) await closeSessions(true)
-  sessionId.value = id
-  messagePage = 1
-  const res = await listMessages(id, 1)
-  messages.value = res.data?.records || []
-  hasEarlierMessages.value = messages.value.length < (res.data?.total || 0)
-  await messageList.value?.scrollToBottom()
+  const request = ++openSessionRequest
+  try {
+    const res = await listMessages(id, 1)
+    if (request !== openSessionRequest) return
+    sessionId.value = id
+    messagePage = 1
+    messages.value = res.data?.records || []
+    hasEarlierMessages.value = messages.value.length < (res.data?.total || 0)
+    await messageList.value?.scrollToBottom()
+  } catch {
+    if (request === openSessionRequest) ElMessage.error('会话内容加载失败，已保留当前对话')
+  } finally {
+    if (request === openSessionRequest) sessionSwitching.value = false
+  }
 }
 
 async function loadEarlierMessages() {
@@ -214,12 +250,19 @@ async function loadEarlierMessages() {
 }
 
 async function removeSession(id: number) {
-  await deleteSession(id)
-  if (sessionId.value === id) {
-    sessionId.value = null
-    messages.value = []
+  if (!canChangeSession()) return
+  sessionSwitching.value = true
+  ++openSessionRequest
+  try {
+    await deleteSession(id)
+    if (sessionId.value === id) {
+      sessionId.value = null
+      messages.value = []
+    }
+    await reloadSessions()
+  } finally {
+    sessionSwitching.value = false
   }
-  await reloadSessions()
 }
 
 async function renameSessionById(id: number, title: string) {
@@ -227,8 +270,26 @@ async function renameSessionById(id: number, title: string) {
   await reloadSessions()
 }
 
-function onSend(text: string, files: File[]) {
-  send(text, files, profileId.value)
+async function onSend(text: string, files: File[]) {
+  if (sessionSwitching.value) {
+    ElMessage.info('会话切换完成后再发送')
+    composer.value?.restore(text, files)
+    return
+  }
+  const accepted = await send(text, files, profileId.value)
+  if (!accepted) composer.value?.restore(text, files)
+}
+
+function canChangeSession() {
+  if (streaming.value) {
+    ElMessage.info('请先停止当前回答，再切换会话')
+    return false
+  }
+  if (sessionSwitching.value) {
+    ElMessage.info('正在切换会话，请稍候')
+    return false
+  }
+  return true
 }
 
 function ask(q: string) {
@@ -423,8 +484,8 @@ async function fav(messageId: number) {
   width: 7px;
   height: 7px;
   border-radius: var(--r-pill);
-  background: var(--flag-normal);
-  box-shadow: 0 0 0 3px var(--flag-normal-wash);
+  background: var(--info);
+  box-shadow: 0 0 0 3px var(--info-wash);
 }
 
 .profile-bar {

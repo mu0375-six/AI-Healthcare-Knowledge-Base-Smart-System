@@ -4,13 +4,7 @@
       kicker="个人知识库"
       title="健康知识收藏"
       desc="集中保存值得反复查看的问诊解释，按收藏时间快速回溯。"
-    >
-      <template #extra>
-        <router-link class="btn btn-primary" to="/chat">
-          <span v-html="ICONS.send"></span>发起问诊
-        </router-link>
-      </template>
-    </PageHeader>
+    />
 
     <div class="collection-summary">
       <div>
@@ -64,6 +58,7 @@
     <el-pagination
       v-if="total > pageSize"
       layout="prev, pager, next, total"
+      :pager-count="5"
       :total="total"
       :page-size="pageSize"
       :current-page="page"
@@ -439,10 +434,10 @@ async function remove(id: number) {
   }
 
   .row-meta button {
-    width: 30px;
-    height: 30px;
+    width: 40px;
+    height: 40px;
     justify-content: center;
-    margin-top: -6px;
+    margin-top: -10px;
     margin-left: auto;
   }
 
@@ -453,6 +448,15 @@ async function remove(id: number) {
   .row-meta button :deep(svg) {
     width: 15px;
     height: 15px;
+  }
+
+  .el-pagination {
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .el-pagination :deep(.el-pagination__total) {
+    display: none;
   }
 
   .answer-copy :deep(p),

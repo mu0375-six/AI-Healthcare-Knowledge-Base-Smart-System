@@ -1,7 +1,11 @@
 <template>
-  <div v-if="report" class="page">
-    <PageHeader kicker="报告解读" :title="report.filename || '检查报告'" :desc="reportMeta">
-      <template #extra>
+  <div class="page">
+    <PageHeader
+      :kicker="loadError ? '读取失败' : '报告解读'"
+      :title="loading ? '正在读取报告' : loadError ? '报告暂时打不开' : report?.filename || '检查报告'"
+      :desc="loading ? '正在核对报告内容与指标。' : loadError || reportMeta"
+    >
+      <template v-if="report && !loading" #extra>
         <div class="acts">
           <el-select v-model="profileId" placeholder="写入档案" style="width: 168px" size="default">
             <el-option v-for="p in profiles" :key="p.id" :label="p.displayName || '档案'" :value="p.id" />
@@ -15,6 +19,29 @@
         </div>
       </template>
     </PageHeader>
+
+    <section v-if="loading" class="panel report-state is-loading" aria-live="polite">
+      <span class="state-icon" aria-hidden="true" v-html="ICONS.report"></span>
+      <span class="chip accent">读取中</span>
+      <h2>正在打开这份报告</h2>
+      <p>系统正在载入原文、提取指标和参考区间。</p>
+      <div class="state-lines" aria-hidden="true">
+        <i v-for="n in 3" :key="n" class="skeleton"></i>
+      </div>
+    </section>
+
+    <section v-else-if="loadError" class="panel report-state" role="alert">
+      <span class="state-icon error" aria-hidden="true" v-html="ICONS.alert"></span>
+      <span class="chip high">读取失败</span>
+      <h2>没有拿到报告内容</h2>
+      <p>{{ loadError }}</p>
+      <div class="state-actions">
+        <button class="btn btn-primary" type="button" @click="loadReport">重新读取</button>
+        <router-link class="btn btn-ghost" :to="{ path: '/health', query: { tab: 'reports' } }">返回报告列表</router-link>
+      </div>
+    </section>
+
+    <template v-else-if="report">
 
     <section class="report-overview" aria-label="报告概览">
       <div>
@@ -84,10 +111,11 @@
     </Shell>
 
     <MedicalDisclaimer />
+    </template>
   </div>
 </template>
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { importReportToProfile, reportDetail } from '@/api/reports'
@@ -111,6 +139,8 @@ const importing = ref(false)
 const exporting = ref(false)
 const docRef = ref<HTMLElement | null>(null)
 const rawOpen = ref(false)
+const loading = ref(true)
+const loadError = ref('')
 
 const abnormal = computed(() => items.value.filter((i) => i.flag === 'high' || i.flag === 'low').length)
 const reportMeta = computed(() => {
@@ -147,20 +177,46 @@ function parseRange(text?: string): { low: number; high: number } | null {
 }
 const { terms, loadTerms } = useTerms()
 
-onMounted(async () => {
+let loadVersion = 0
+async function loadReport() {
+  const version = ++loadVersion
+  loading.value = true
+  loadError.value = ''
+  report.value = null
+  items.value = []
+  profiles.value = []
+  profileId.value = undefined
+  rawOpen.value = false
   const id = Number(route.params.id)
-  const res = await reportDetail(id)
-  report.value = res.data.report
-  items.value = res.data.items || []
-  profileId.value = res.data.report.profileId || undefined
-  loadTerms()
   try {
-    profiles.value = (await listProfiles()).data || []
-    if (!profileId.value && profiles.value[0]?.id) profileId.value = profiles.value[0].id
+    if (!Number.isInteger(id) || id <= 0) throw new Error('invalid-report-id')
+    const res = await reportDetail(id)
+    if (version !== loadVersion) return
+    report.value = res.data.report
+    items.value = res.data.items || []
+    profileId.value = res.data.report.profileId || undefined
+    void loadTerms()
+    void loadProfilesForReport(version)
   } catch {
-    profiles.value = []
+    if (version !== loadVersion) return
+    loadError.value = '报告可能已被删除、无权访问，或服务暂时不可用。请返回列表确认后重试。'
+  } finally {
+    if (version === loadVersion) loading.value = false
   }
-})
+}
+
+async function loadProfilesForReport(version: number) {
+  try {
+    const nextProfiles = (await listProfiles()).data || []
+    if (version !== loadVersion) return
+    profiles.value = nextProfiles
+    if (!profileId.value && nextProfiles[0]?.id) profileId.value = nextProfiles[0].id
+  } catch {
+    if (version === loadVersion) profiles.value = []
+  }
+}
+
+watch(() => route.params.id, () => void loadReport(), { immediate: true })
 
 async function doImport() {
   if (!report.value || !profileId.value) return
@@ -233,6 +289,74 @@ async function exportPdf() {
 
 .page :deep(.head h1) {
   overflow-wrap: anywhere;
+}
+
+.report-state {
+  min-height: 380px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-3);
+  padding: var(--space-7) var(--space-5);
+  text-align: center;
+}
+
+.report-state h2 {
+  font-size: 22px;
+}
+
+.report-state > p {
+  max-width: 480px;
+  color: var(--ink-mute);
+  line-height: 1.7;
+}
+
+.state-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--r-card);
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.state-icon.error {
+  background: var(--flag-high-wash);
+  color: var(--flag-high);
+}
+
+.state-icon :deep(svg) {
+  width: 24px;
+  height: 24px;
+}
+
+.state-lines {
+  width: min(440px, 100%);
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.state-lines i {
+  display: block;
+  height: 12px;
+}
+
+.state-lines i:nth-child(2) {
+  width: 82%;
+}
+
+.state-lines i:nth-child(3) {
+  width: 64%;
+}
+
+.state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .acts {
