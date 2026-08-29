@@ -4,7 +4,7 @@
 
     <!-- 左侧常驻栏：图标 + 文字，一屏就能看见全部去处。
          内容区因此从"窄栏居中"变成"贴着侧栏铺开"。 -->
-    <aside class="rail" :class="{ open: railOpen }">
+    <aside id="primary-navigation" class="rail" :class="{ open: railOpen }">
       <router-link to="/home" class="brand" @click="railOpen = false">
         <BrandMark />
         <span class="brand-name">康识问诊</span>
@@ -35,32 +35,76 @@
         </router-link>
       </nav>
 
-      <!-- 侧栏底部的提示卡：Canva 在这个位置放的也是引导卡片 -->
-      <div class="rail-card">
-        <b>把化验单拍下来</b>
-        <i>指标、高低、逐项解释会自动整理成档案。</i>
-        <router-link class="btn btn-primary btn-sm" to="/reports/upload">去解读</router-link>
+      <div v-if="railHint" class="rail-card">
+        <b>{{ railHint.title }}</b>
+        <i>{{ railHint.desc }}</i>
+        <router-link class="btn btn-primary btn-sm" :to="railHint.to" @click="railOpen = false">
+          {{ railHint.action }}
+        </router-link>
       </div>
     </aside>
 
-    <div v-if="railOpen" class="scrim" @click="railOpen = false"></div>
+    <button
+      v-if="railOpen"
+      class="scrim"
+      type="button"
+      aria-label="关闭主菜单"
+      @click="railOpen = false"
+    ></button>
 
     <div class="stage">
       <header class="topbar">
-        <button class="burger" type="button" aria-label="打开菜单" @click="railOpen = true">
+        <button
+          class="burger"
+          type="button"
+          aria-label="打开菜单"
+          aria-controls="primary-navigation"
+          :aria-expanded="railOpen"
+          @click="railOpen = true"
+        >
           <span></span><span></span>
         </button>
-        <strong class="crumb">{{ String(route.meta.title || '') }}</strong>
+        <nav class="breadcrumbs" aria-label="面包屑">
+          <template v-for="(crumb, index) in breadcrumbs" :key="crumb.label">
+            <span v-if="index" class="crumb-separator" aria-hidden="true">/</span>
+            <router-link v-if="crumb.to" class="crumb-link" :to="crumb.to">{{ crumb.label }}</router-link>
+            <strong v-else class="crumb-current" aria-current="page">{{ crumb.label }}</strong>
+          </template>
+        </nav>
         <div class="top-end">
-          <button
-            class="icon-btn"
-            type="button"
-            :title="dark ? '切换到浅色' : '切换到深色'"
-            :aria-label="dark ? '切换到浅色' : '切换到深色'"
-            @click="dark = !dark"
+          <router-link
+            v-if="routeAction"
+            class="btn btn-quiet btn-sm top-action"
+            :to="routeAction.to"
+            :aria-label="routeAction.label"
           >
-            <span v-html="dark ? ICONS.sun : ICONS.moon"></span>
-          </button>
+            <span class="top-action-icon" aria-hidden="true" v-html="ICONS[routeAction.icon]"></span>
+            <span class="top-action-label">{{ routeAction.label }}</span>
+          </router-link>
+
+          <el-dropdown trigger="click" @command="onThemeCommand">
+            <button
+              class="icon-btn"
+              type="button"
+              aria-haspopup="menu"
+              :title="`主题：${themeModeLabel}`"
+              :aria-label="`选择主题，当前为${themeModeLabel}`"
+            >
+              <span aria-hidden="true" v-html="themeIcon"></span>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-for="option in THEME_OPTIONS"
+                  :key="option.value"
+                  :command="option.value"
+                >
+                  <span>{{ option.label }}</span>
+                  <span v-if="themeMode === option.value" class="theme-current">当前</span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
 
           <el-dropdown trigger="click" @command="onCommand">
             <button class="who" type="button">
@@ -95,10 +139,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { currentTheme, toggleTheme } from '@/utils/theme'
+import {
+  applyThemeMode,
+  currentTheme,
+  currentThemeMode,
+  type ThemeMode,
+} from '@/utils/theme'
 import { ICONS, type IconName } from '@/utils/icons'
 import BrandMark from '@/components/BrandMark.vue'
 import AccountDialog from '@/components/AccountDialog.vue'
@@ -110,6 +159,62 @@ const isChat = computed(() => route.path === '/chat')
 const accountVisible = ref(false)
 const railOpen = ref(false)
 const avatarChar = computed(() => user.nickname.slice(0, 1).toUpperCase())
+
+type Breadcrumb = { label: string; to?: RouteLocationRaw }
+type RouteAction = { label: string; to: RouteLocationRaw; icon: IconName }
+type RailHint = { title: string; desc: string; action: string; to: RouteLocationRaw }
+
+const breadcrumbs = computed<Breadcrumb[]>(() => {
+  const current = { label: String(route.meta.title || '') }
+  const parent = route.meta.breadcrumbParent as Breadcrumb | undefined
+  return parent ? [parent, current] : [current]
+})
+
+const routeAction = computed(
+  () => (route.meta.topAction as RouteAction | undefined) || null,
+)
+
+const railHint = computed<RailHint | null>(() => {
+  if (route.path === '/reports/upload') return null
+  if (route.path === '/chat') {
+    return {
+      title: '图片也可以直接问',
+      desc: '化验单、药盒或患处照片，发图后补一句问题即可。',
+      action: '发照片',
+      to: { path: '/chat', query: { ...route.query, photo: '1' } },
+    }
+  }
+  if (route.path === '/health') {
+    return {
+      title: '让档案更完整',
+      desc: '上传一份报告，指标和高低会自动归入档案。',
+      action: '上传报告',
+      to: '/reports/upload',
+    }
+  }
+  if (route.path.startsWith('/reports/')) {
+    return {
+      title: '解读会留在档案里',
+      desc: '回到报告列表，可继续查看同一份健康记录。',
+      action: '返回档案',
+      to: { path: '/health', query: { tab: 'reports' } },
+    }
+  }
+  if (route.path === '/triage') {
+    return {
+      title: '症状还说不清？',
+      desc: '转到问诊，可以继续补充症状、用药和图片。',
+      action: '去问诊',
+      to: '/chat',
+    }
+  }
+  return {
+    title: '把化验单拍下来',
+    desc: '指标、高低、逐项解释会自动整理成档案。',
+    action: '去解读',
+    to: '/reports/upload',
+  }
+})
 
 /** 顶级目的地收到三个：一件事一个入口，其余降为二级。 */
 const PRIMARY: { to: string; label: string; icon: IconName }[] = [
@@ -127,18 +232,39 @@ const SECONDARY: { to: string; label: string; icon: IconName; admin?: boolean }[
 
 const secondary = computed(() => SECONDARY.filter((s) => !s.admin || user.isAdmin))
 
-const dark = ref(currentTheme() === 'dark')
-watch(dark, (v) => {
-  if (currentTheme() === (v ? 'dark' : 'light')) return
-  toggleTheme()
-})
+const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: 'light', label: '浅色' },
+  { value: 'dark', label: '深色' },
+  { value: 'system', label: '跟随系统' },
+]
+const themeMode = ref<ThemeMode>(currentThemeMode())
+const effectiveTheme = ref(currentTheme())
+const themeModeLabel = computed(
+  () => THEME_OPTIONS.find((option) => option.value === themeMode.value)?.label || '浅色',
+)
+const themeIcon = computed(() =>
+  effectiveTheme.value === 'dark' ? ICONS.moon : ICONS.sun,
+)
 
 // 路由一变就收起抽屉，否则返回时它还开着
 watch(() => route.path, () => (railOpen.value = false))
 
 onMounted(() => {
   user.fetchMe().catch(() => undefined)
+  window.addEventListener('theme-change', syncThemeState)
 })
+
+onBeforeUnmount(() => window.removeEventListener('theme-change', syncThemeState))
+
+function syncThemeState() {
+  themeMode.value = currentThemeMode()
+  effectiveTheme.value = currentTheme()
+}
+
+function onThemeCommand(command: ThemeMode) {
+  applyThemeMode(command)
+  syncThemeState()
+}
 
 function onCommand(cmd: string) {
   if (cmd === 'logout') {
@@ -164,7 +290,7 @@ function onCommand(cmd: string) {
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  padding: 18px 14px 16px;
+  padding: var(--space-4) 14px;
   background: var(--paper-2);
   border-right: 1px solid var(--edge);
 }
@@ -172,8 +298,8 @@ function onCommand(cmd: string) {
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 8px 20px;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-5);
   color: var(--ink);
   transition: transform 0.4s var(--ease);
 }
@@ -186,7 +312,7 @@ function onCommand(cmd: string) {
   font-family: var(--font-display);
   font-size: 19px;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .rail-nav {
@@ -204,7 +330,7 @@ function onCommand(cmd: string) {
   margin: 18px 10px 6px;
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.18em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
@@ -255,8 +381,8 @@ function onCommand(cmd: string) {
 
 /* 侧栏底部引导卡 */
 .rail-card {
-  margin-top: 14px;
-  padding: 14px;
+  margin-top: var(--space-3);
+  padding: var(--space-3);
   border-radius: var(--r-card);
   background: var(--card);
   border: 1px solid var(--edge);
@@ -275,7 +401,7 @@ function onCommand(cmd: string) {
   font-size: 12px;
   line-height: 1.6;
   color: var(--ink-mute);
-  margin: 4px 0 10px;
+  margin: var(--space-1) 0 var(--space-3);
 }
 
 /* ---- 主区 ---- */
@@ -289,28 +415,70 @@ function onCommand(cmd: string) {
   position: sticky;
   top: 0;
   z-index: var(--z-nav);
-  height: 58px;
+  height: var(--topbar-h);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 28px;
+  gap: var(--space-3);
+  padding: 0 var(--main-pad);
   background: var(--chrome);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border-bottom: 1px solid var(--edge);
 }
 
-.crumb {
+.breadcrumbs {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: 14px;
-  font-weight: 600;
   color: var(--ink-mute);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.crumb-link {
+  flex-shrink: 0;
+  color: var(--ink-faint);
+  transition: color 0.18s var(--ease-soft);
+}
+
+.crumb-link:hover {
+  color: var(--accent);
+}
+
+.crumb-separator {
+  flex-shrink: 0;
+  color: var(--edge-strong);
+}
+
+.crumb-current {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
 }
 
 .top-end {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.top-action {
+  color: var(--ink-mute);
+}
+
+.top-action-icon {
+  display: grid;
+  place-items: center;
+}
+
+.top-action-icon :deep(svg) {
+  width: 14px;
+  height: 14px;
 }
 
 .icon-btn {
@@ -322,7 +490,7 @@ function onCommand(cmd: string) {
   background: none;
   color: var(--ink-mute);
   cursor: pointer;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   transition: color 0.3s var(--ease-soft), background 0.4s var(--ease),
     transform 0.4s var(--ease);
 }
@@ -346,12 +514,12 @@ function onCommand(cmd: string) {
 .who {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   border: 0;
   background: none;
   cursor: pointer;
   padding: 3px 12px 3px 3px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   color: var(--ink-soft);
   transition: background 0.4s var(--ease), transform 0.4s var(--ease);
 }
@@ -369,7 +537,7 @@ function onCommand(cmd: string) {
 .avatar {
   width: 30px;
   height: 30px;
-  border-radius: 10px;
+  border-radius: var(--r-avatar);
   background: var(--accent);
   color: var(--on-accent);
   font-size: 13px;
@@ -398,18 +566,24 @@ function onCommand(cmd: string) {
   color: var(--ink-faint);
 }
 
+.theme-current {
+  margin-left: var(--space-4);
+  color: var(--accent);
+  font-size: 11px;
+}
+
 .main {
   flex: 1;
   min-height: 0;
-  padding: 26px 28px 48px;
+  padding: var(--space-5) var(--main-pad) var(--space-7);
 }
 
 .main-fill {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  height: calc(100dvh - 58px);
-  padding-bottom: 20px;
+  height: calc(100dvh - var(--topbar-h));
+  padding-bottom: var(--space-5);
 }
 
 .main-fill > * {
@@ -447,7 +621,11 @@ function onCommand(cmd: string) {
     position: fixed;
     inset: 0;
     z-index: var(--z-grain);
-    background: rgba(34, 30, 26, 0.42);
+    width: auto;
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: color-mix(in srgb, var(--ink) 42%, transparent);
     animation: scrim-in 0.3s var(--ease);
   }
 
@@ -475,16 +653,40 @@ function onCommand(cmd: string) {
   }
 
   .topbar {
-    padding: 0 16px;
+    padding: 0 var(--space-4);
   }
 
   .main {
-    padding: 18px 16px 40px;
+    padding: var(--space-4) var(--space-4) var(--space-6);
   }
 
   .who-name,
   .caret {
     display: none;
   }
+}
+
+@media (max-width: 520px) {
+  .top-action {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+  }
+
+  .top-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+:global(html.dark) .scrim {
+  background: color-mix(in srgb, var(--paper) 72%, transparent);
 }
 </style>

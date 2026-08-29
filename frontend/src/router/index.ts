@@ -13,21 +13,68 @@ const router = createRouter({
       children: [
         { path: 'home', component: () => import('@/views/Home.vue'), meta: { title: '今天' } },
         { path: 'news/:id', component: () => import('@/views/NewsDetail.vue'), meta: { title: '健康新闻' } },
-        { path: 'chat', component: () => import('@/views/Chat.vue'), meta: { title: '问诊' } },
-        { path: 'health', component: () => import('@/views/Health.vue'), meta: { title: '档案' } },
+        {
+          path: 'chat',
+          component: () => import('@/views/Chat.vue'),
+          meta: {
+            title: '问诊',
+            topAction: { label: '新对话', to: { path: '/chat', query: { new: '1' } }, icon: 'plus' },
+          },
+        },
+        {
+          path: 'health',
+          component: () => import('@/views/Health.vue'),
+          meta: {
+            title: '档案',
+            topAction: { label: '上传报告', to: '/reports/upload', icon: 'upload' },
+          },
+        },
         // 报告解读并入「档案」：上传报告产出的指标本来就写进档案，
         // 拆成两个顶级目的地会让一条流程跨页。旧链接重定向过去。
         { path: 'reports', redirect: { path: '/health', query: { tab: 'reports' } } },
-        { path: 'reports/upload', component: () => import('@/views/Reports.vue'), meta: { title: '上传报告' } },
-        { path: 'reports/:id', component: () => import('@/views/ReportDetail.vue'), meta: { title: '报告详情' } },
-        { path: 'triage', component: () => import('@/views/Triage.vue'), meta: { title: '科室导诊' } },
+        {
+          path: 'reports/upload',
+          component: () => import('@/views/Reports.vue'),
+          meta: {
+            title: '上传报告',
+            breadcrumbParent: { label: '档案', to: { path: '/health', query: { tab: 'reports' } } },
+            topAction: {
+              label: '查看报告',
+              to: { path: '/health', query: { tab: 'reports' } },
+              icon: 'report',
+            },
+          },
+        },
+        {
+          path: 'reports/:id',
+          component: () => import('@/views/ReportDetail.vue'),
+          meta: {
+            title: '报告详情',
+            breadcrumbParent: { label: '档案', to: { path: '/health', query: { tab: 'reports' } } },
+          },
+        },
+        {
+          path: 'triage',
+          component: () => import('@/views/Triage.vue'),
+          meta: {
+            title: '科室导诊',
+            topAction: { label: '转到问诊', to: '/chat', icon: 'chat' },
+          },
+        },
         {
           // 开发者/管理员调试面板：Milvus 连接状态、向量维度、召回打分
           path: 'vectors',
           component: () => import('@/views/Vectors.vue'),
           meta: { title: '向量检索', admin: true },
         },
-        { path: 'favorites', component: () => import('@/views/Favorites.vue'), meta: { title: '我的收藏' } },
+        {
+          path: 'favorites',
+          component: () => import('@/views/Favorites.vue'),
+          meta: {
+            title: '我的收藏',
+            topAction: { label: '继续问诊', to: '/chat', icon: 'chat' },
+          },
+        },
         {
           path: 'admin/knowledge',
           component: () => import('@/views/admin/Knowledge.vue'),
