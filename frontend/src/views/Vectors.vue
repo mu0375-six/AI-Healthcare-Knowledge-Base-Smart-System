@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <PageHeader icon="dots" kicker="Vectors" title="医学知识向量检索" desc="切片向量写入 Milvus（连不上则回退内存）。先看库状态，再输入症状或药名试检索。">
+    <PageHeader kicker="Vectors" title="医学知识向量检索" desc="切片向量写入 Milvus（连不上则回退内存）。先看库状态，再输入症状或药名试检索。">
       <template #extra>
         <button v-if="user.isAdmin" class="btn btn-ghost" type="button" :disabled="reindexing" @click="reindex">
           {{ reindexing ? '重建中…' : '重建索引' }}

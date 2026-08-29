@@ -20,6 +20,8 @@
    2. 所有卡片走 Double-Bezel：外壳 + 内芯，圆角同心。
    3. 数字一律等宽 + tabular-nums。
    4. 动效只用自定义 cubic-bezier，不用 linear / ease-in-out 关键字。
+   5. 语义色只由数据高低驱动，品牌色不表示正常或异常。
+   6. 分类色只按序列区分，永不借用高低语义；组件颜色只引用 token。
    ============================================================ */
 @import './fonts.css';
 
@@ -90,12 +92,27 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* ---- 间距：图文 / 构件 / 区块 / 页面只从这组刻度取值 ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
   /* ---- 圆角：容器大、内件按同心计算 ---- */
   --r-shell: 26px;
   --r-core: 20px; /* = shell - 6px 外壳内边距 */
   --r-card: 16px;
   --r-control: 11px;
   --r-chip: 8px;
+  --r-avatar: 10px;
+  --r-pill: 999px;
+
+  /* AppLayout 与内容页共享，避免页面各自手算可用高度。 */
+  --topbar-h: 58px;
+  --main-pad: 34px;
 
   --z-nav: 30;
   --z-grain: 45;
@@ -240,22 +257,21 @@ select {
 
 /* ---- 标题：可变衬线 + 光学尺寸。字号越大对比越强 ---- */
 h1,
-h2,
-h3 {
+h2 {
   margin: 0;
   font-family: var(--font-display);
   font-optical-sizing: auto;
   font-weight: 600;
   color: var(--ink);
   line-height: 1.08;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   text-wrap: balance;
 }
 
 h1 {
   font-size: clamp(34px, 4.2vw, 56px);
   font-weight: 500;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   line-height: 1.12;
   /* balance 对中文会算出奇怪的断点，中文标题一律用显式 <br> 控制换行 */
   text-wrap: initial;
@@ -263,13 +279,18 @@ h1 {
 
 h2 {
   font-size: clamp(26px, 3vw, 38px);
-  letter-spacing: -0.024em;
+  letter-spacing: 0;
 }
 
 h3 {
+  margin: 0;
+  font-family: var(--font);
   font-size: 21px;
-  letter-spacing: -0.018em;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink);
   line-height: 1.25;
+  text-wrap: balance;
 }
 
 /* 小标题回到无衬线：衬线只给大字，小字用衬线会糊 */
@@ -278,7 +299,7 @@ h4 {
   font-family: var(--font);
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   color: var(--ink);
 }
 
@@ -299,18 +320,23 @@ time,
 .eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 11px;
-  border-radius: 999px;
+  gap: var(--space-2);
+  padding: var(--space-1) 11px;
+  border-radius: var(--r-pill);
   border: 1px solid var(--edge);
   background: var(--tray);
   color: var(--ink-mute);
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   line-height: 1.6;
   white-space: nowrap;
+}
+
+.eyebrow:lang(en),
+.eyebrow.latin {
+  letter-spacing: 0.2em;
 }
 
 .eyebrow svg {
@@ -333,7 +359,7 @@ time,
 
 .stack {
   display: grid;
-  gap: 18px;
+  gap: var(--space-5);
 }
 
 /* ---- Double-Bezel：外壳（托盘）+ 内芯（玻璃板）----
@@ -356,7 +382,7 @@ time,
 }
 
 .core-pad {
-  padding: 22px 24px;
+  padding: var(--space-5);
 }
 
 /* 单层表面：Double-Bezel 只给需要强调的主构件。
@@ -371,12 +397,23 @@ time,
 
 /* 单层卡片：比 panel 轻一级 */
 .tile {
+  position: relative;
   background: var(--card);
   border: 1px solid var(--edge);
   border-radius: var(--r-card);
   box-shadow: var(--inner-light), var(--shadow-1);
-  transition: transform 0.45s var(--ease), box-shadow 0.45s var(--ease),
-    border-color 0.3s var(--ease-soft);
+  transition: transform 0.4s var(--ease), border-color 0.18s var(--ease-soft);
+}
+
+.tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: var(--shadow-3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s var(--ease);
 }
 
 button.tile,
@@ -390,9 +427,12 @@ a.tile,
   button.tile:hover,
   a.tile:hover,
   .pressable:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--inner-light), var(--shadow-3);
     border-color: var(--edge-strong);
+  }
+
+  button.tile:hover::after,
+  a.tile:hover::after {
+    opacity: 1;
   }
 }
 
@@ -407,7 +447,8 @@ a.tile:active,
 .bento {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 14px;
+  align-items: start;
+  gap: var(--space-4);
 }
 
 .b4 {
@@ -432,15 +473,15 @@ a.tile:active,
 .section-head {
   display: flex;
   align-items: baseline;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .section-head h3 {
   font-family: var(--font);
-  font-size: 16px;
+  font-size: 16.5px;
   font-weight: 600;
-  letter-spacing: -0.012em;
+  letter-spacing: 0;
 }
 
 .section-head .count {
@@ -459,9 +500,9 @@ a.tile:active,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 550;
@@ -537,7 +578,7 @@ a.tile:active,
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.16);
   transition: transform 0.5s var(--ease), background 0.3s var(--ease-soft);
 }
@@ -557,7 +598,7 @@ a.tile:active,
 .btn-sm {
   padding: 6px 14px;
   font-size: 13px;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .btn-sm svg {
@@ -585,6 +626,31 @@ a.tile:active,
   font-weight: 600;
   line-height: 1.5;
   white-space: nowrap;
+}
+
+.chip-btn {
+  border: 1px solid var(--edge-strong);
+  background: transparent;
+  color: var(--ink-mute);
+  border-radius: var(--r-pill);
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color 0.18s var(--ease-soft), border-color 0.18s var(--ease-soft),
+    background 0.18s var(--ease-soft), transform 0.4s var(--ease);
+}
+
+.chip-btn:active {
+  transform: scale(0.96);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent-line);
+    background: var(--accent-wash);
+  }
 }
 
 .chip svg {
@@ -637,6 +703,11 @@ a.tile:active,
   border-color: var(--flag-high-line);
   color: var(--flag-high);
 }
+.notice.low {
+  background: var(--flag-low-wash);
+  border-color: var(--flag-low-line);
+  color: var(--flag-low);
+}
 .notice.normal {
   background: var(--flag-normal-wash);
   border-color: var(--flag-normal-line);
@@ -679,7 +750,7 @@ a.tile:active,
 
 .el-button {
   font-weight: 550;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   transition: background 0.3s var(--ease-soft), border-color 0.3s var(--ease-soft),
     transform 0.4s var(--ease);
 }
@@ -837,7 +908,7 @@ html.dark .skeleton::after {
 }
 
 .empty h3 {
-  font-size: 19px;
+  font-size: 21px;
 }
 
 .empty p {
@@ -860,7 +931,7 @@ html.dark .skeleton::after {
   opacity: 0;
   transform: translateY(26px);
   filter: blur(6px);
-  transition: opacity 0.8s var(--ease), transform 0.8s var(--ease), filter 0.8s var(--ease);
+  transition: opacity 0.6s var(--ease), transform 0.6s var(--ease), filter 0.6s var(--ease);
 }
 
 .reveal.in {
@@ -926,7 +997,7 @@ html.dark .skeleton::after {
   top: -60px;
   z-index: var(--z-modal);
   padding: 10px 16px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--accent);
   color: var(--on-accent);
   font-size: 14px;
@@ -945,7 +1016,7 @@ html.dark .skeleton::after {
 
 ::-webkit-scrollbar-thumb {
   background: rgba(34, 30, 26, 0.18);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   border: 2px solid transparent;
   background-clip: padding-box;
 }
@@ -995,7 +1066,7 @@ html.dark ::-webkit-scrollbar-thumb {
 /* ============================================================
    响应式
    ============================================================ */
-@media (max-width: 900px) {
+@media (max-width: 1280px) {
   .b4,
   .b5,
   .b6,
@@ -1016,11 +1087,11 @@ html.dark ::-webkit-scrollbar-thumb {
 
   .shell {
     padding: 5px;
-    border-radius: 22px;
+    border-radius: calc(var(--r-shell) - 4px);
   }
 
   .core {
-    border-radius: 17px;
+    border-radius: calc(var(--r-core) - 3px);
   }
 
   .page {

@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <PageHeader icon="book" kicker="Knowledge" title="知识库" desc="优先接入世界卫生组织、国家卫生健康委等权威公开文本，也可继续上传或录入。" />
+    <PageHeader kicker="Knowledge" title="知识库" desc="优先接入世界卫生组织、国家卫生健康委等权威公开文本，也可继续上传或录入。" />
 
     <section class="panel core-pad sync">
       <div>
